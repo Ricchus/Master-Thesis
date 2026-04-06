@@ -1,0 +1,491 @@
+.avatarTaskShellRoot {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.avatarTaskShellViewport {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.avatarTaskShellStage {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform-origin: center center;
+}
+
+.avatarTaskShell {
+  --bg: #ece4d9;
+  --bg-top: #f7f2ea;
+  --panel: rgba(252, 248, 242, 0.86);
+  --panel-soft: rgba(108, 118, 132, 0.06);
+  --text: #2a333d;
+  --muted: rgba(42, 51, 61, 0.62);
+  --border: rgba(90, 100, 114, 0.12);
+  --bubble-user-start: rgba(120, 142, 178, 0.3);
+  --bubble-user-end: rgba(140, 160, 193, 0.18);
+  --bubble-user-border: rgba(95, 111, 150, 0.22);
+  --bubble-assistant-start: rgba(255, 253, 249, 0.98);
+  --bubble-assistant-end: rgba(255, 248, 240, 0.94);
+  --bubble-assistant-border: rgba(146, 127, 100, 0.14);
+  --bubble-error-start: rgba(255, 245, 245, 0.96);
+  --bubble-error-end: rgba(251, 235, 235, 0.92);
+  --bubble-error-border: rgba(191, 94, 94, 0.24);
+  --btn: rgba(105, 125, 163, 0.14);
+  --btn-hover: rgba(105, 125, 163, 0.22);
+  --accent: #6d84ac;
+  --accent-strong: #556d97;
+  --composer-bg: linear-gradient(180deg, rgba(255, 251, 245, 0.92) 0%, rgba(244, 238, 230, 0.96) 100%);
+  --input-bg: rgba(255, 255, 255, 0.76);
+  --avatar-bg-top: #f1eff0;
+  --avatar-bg-bottom: #ecebec;
+  --bubble-tail-space: 18px;
+
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 30px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  overflow: hidden;
+  backdrop-filter: blur(24px);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  letter-spacing: normal;
+}
+
+.avatarTaskShell *,
+.avatarTaskShell *::before,
+.avatarTaskShell *::after {
+  box-sizing: border-box;
+}
+
+.avatarTaskShell :is(button, input) {
+  font: inherit;
+}
+
+.avatarTaskShell svg {
+  display: block;
+  overflow: visible;
+}
+
+.avatarTaskShell .msgList {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 18px 24px 12px;
+  overscroll-behavior: contain;
+  background:
+    radial-gradient(circle at 10% 64%, rgba(241, 239, 240, 1) 0%, rgba(236, 235, 236, 0.94) 22%, rgba(236, 235, 236, 0.52) 38%, rgba(236, 235, 236, 0) 56%),
+    linear-gradient(90deg, rgba(241, 239, 240, 0.98) 0%, rgba(236, 235, 236, 0.92) 34%, rgba(229, 224, 217, 0.72) 100%),
+    linear-gradient(180deg, rgba(242, 240, 241, 0.18) 0%, rgba(236, 233, 236, 0.62) 100%);
+}
+
+.avatarTaskShell .msgList > div {
+  width: 100%;
+  min-width: 0;
+}
+
+.avatarTaskShell .msgRow {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  margin: 14px 0;
+  align-items: flex-end;
+}
+
+.avatarTaskShell .msgRow.user {
+  justify-content: flex-end;
+  padding-left: 56px;
+}
+
+.avatarTaskShell .msgRow.assistant,
+.avatarTaskShell .msgRow.system-error {
+  justify-content: flex-start;
+  padding-right: 56px;
+}
+
+.avatarTaskShell .msgRow.system-error {
+  justify-content: center;
+  padding-left: 28px;
+}
+
+.avatarTaskShell .bubble {
+  position: relative;
+  flex: 0 1 auto;
+  min-width: 0;
+  width: fit-content;
+  max-width: min(100%, 760px);
+  overflow: visible;
+  isolation: isolate;
+}
+
+.avatarTaskShell .bubble.system-error {
+  max-width: min(88%, 760px);
+}
+
+.avatarTaskShell .bubble.tailed.assistant {
+  padding-left: var(--bubble-tail-space);
+}
+
+.avatarTaskShell .bubble.tailed.user {
+  padding-right: var(--bubble-tail-space);
+}
+
+.avatarTaskShell .bubble.user {
+  --bubble-fill-start: var(--bubble-user-start);
+  --bubble-fill-end: var(--bubble-user-end);
+  --bubble-tail-fill: var(--bubble-fill-end);
+  --bubble-border-color: var(--bubble-user-border);
+  --bubble-shadow: 0 18px 34px rgba(90, 108, 143, 0.16);
+}
+
+.avatarTaskShell .bubble.assistant {
+  --bubble-fill-start: var(--bubble-assistant-start);
+  --bubble-fill-end: var(--bubble-assistant-end);
+  --bubble-tail-fill: var(--bubble-fill-end);
+  --bubble-border-color: var(--bubble-assistant-border);
+  --bubble-shadow: 0 14px 30px rgba(117, 101, 81, 0.08);
+}
+
+.avatarTaskShell .bubble.system-error {
+  --bubble-fill-start: var(--bubble-error-start);
+  --bubble-fill-end: var(--bubble-error-end);
+  --bubble-tail-fill: var(--bubble-fill-end);
+  --bubble-border-color: var(--bubble-error-border);
+  --bubble-shadow: 0 16px 28px rgba(146, 73, 73, 0.1);
+}
+
+.avatarTaskShell .bubbleSurface {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  flex-direction: column;
+  min-width: 0;
+  max-width: 100%;
+  padding: 14px 18px 11px;
+  border: 1px solid transparent;
+  border-radius: 24px;
+  line-height: 1.72;
+  word-break: break-word;
+  backdrop-filter: blur(8px);
+}
+
+.avatarTaskShell .bubble.user .bubbleSurface {
+  background: linear-gradient(135deg, var(--bubble-fill-start) 0%, var(--bubble-fill-end) 100%);
+  border-color: var(--bubble-border-color);
+  box-shadow: var(--bubble-shadow);
+  border-radius: 24px 24px 10px 24px;
+}
+
+.avatarTaskShell .bubble.assistant .bubbleSurface,
+.avatarTaskShell .bubble.system-error .bubbleSurface {
+  background: linear-gradient(180deg, var(--bubble-fill-start) 0%, var(--bubble-fill-end) 100%);
+  border-color: var(--bubble-border-color);
+  box-shadow: var(--bubble-shadow);
+  border-radius: 24px 24px 24px 10px;
+}
+
+.avatarTaskShell .bubbleTail {
+  position: absolute;
+  bottom: 0;
+  z-index: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.avatarTaskShell .bubbleTail.assistant,
+.avatarTaskShell .bubbleOutline.assistant {
+  left: 0;
+}
+
+.avatarTaskShell .bubbleTail.user,
+.avatarTaskShell .bubbleOutline.user {
+  right: 0;
+}
+
+.avatarTaskShell .bubbleOutline {
+  position: absolute;
+  bottom: 0;
+  z-index: 2;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.avatarTaskShell .bubbleBody {
+  min-width: 0;
+  font-size: 14px;
+}
+
+.avatarTaskShell .bubbleBody.revealing {
+  white-space: pre-wrap;
+}
+
+.avatarTaskShell .messageTextStructured > :first-child {
+  margin-top: 0;
+}
+
+.avatarTaskShell .messageTextStructured > :last-child {
+  margin-bottom: 0;
+}
+
+.avatarTaskShell .messageTextStructured p,
+.avatarTaskShell .messageTextStructured ul,
+.avatarTaskShell .messageTextStructured ol {
+  margin: 0 0 0.72em;
+}
+
+.avatarTaskShell .messageTextStructured ul,
+.avatarTaskShell .messageTextStructured ol {
+  padding-left: 1.35em;
+}
+
+.avatarTaskShell .messageTextStructured li + li {
+  margin-top: 0.34em;
+}
+
+.avatarTaskShell .bubble.user .messageTextStructured,
+.avatarTaskShell .bubble.user .bubbleMeta {
+  color: rgba(35, 46, 63, 0.92);
+}
+
+.avatarTaskShell .bubble.user .bubbleMeta,
+.avatarTaskShell .bubble.system-error .bubbleMeta,
+.avatarTaskShell .bubbleMeta {
+  margin-top: 8px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
+.avatarTaskShell .footerBar {
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: 216px minmax(0, 1fr);
+  gap: 18px;
+  align-items: end;
+  padding: 18px 22px 22px;
+  background:
+    radial-gradient(circle at 12% 32%, rgba(241, 239, 240, 0.98) 0%, rgba(236, 235, 236, 0.92) 26%, rgba(236, 235, 236, 0.26) 58%, rgba(236, 235, 236, 0) 76%),
+    linear-gradient(90deg, rgba(241, 239, 240, 0.98) 0%, rgba(236, 235, 236, 0.94) 30%, rgba(233, 228, 221, 0.84) 62%, rgba(242, 236, 227, 0.92) 100%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.44) 100%);
+}
+
+.avatarTaskShell .avatarDock {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  min-height: 184px;
+  overflow: visible;
+}
+
+.avatarTaskShell .avatarThoughtBubble {
+  position: absolute;
+  top: -4px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 56px;
+  min-height: 36px;
+  padding: 8px 12px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(146, 127, 100, 0.14);
+  box-shadow: 0 12px 24px rgba(117, 101, 81, 0.12);
+}
+
+.avatarTaskShell .avatarThoughtBubble::before,
+.avatarTaskShell .avatarThoughtBubble::after {
+  content: '';
+  position: absolute;
+  background: rgba(255, 255, 255, 0.94);
+  border-radius: 999px;
+}
+
+.avatarTaskShell .avatarThoughtBubble::before {
+  width: 12px;
+  height: 12px;
+  bottom: -8px;
+  left: 18px;
+  box-shadow: 0 2px 4px rgba(117, 101, 81, 0.08);
+}
+
+.avatarTaskShell .avatarThoughtBubble::after {
+  width: 8px;
+  height: 8px;
+  bottom: -16px;
+  left: 12px;
+  box-shadow: 0 2px 4px rgba(117, 101, 81, 0.08);
+}
+
+.avatarTaskShell .thinkingDots {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatarTaskShell .thinkingDots span {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(109, 132, 172, 0.68);
+  animation: avatar-task-thinking 1.3s infinite ease-in-out;
+}
+
+.avatarTaskShell .thinkingDots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.avatarTaskShell .thinkingDots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.avatarTaskShell .avatarDock::before {
+  content: '';
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 168px;
+  height: 30px;
+  border-radius: 999px;
+  background: radial-gradient(circle at center, rgba(147, 145, 154, 0.26) 0%, rgba(147, 145, 154, 0.16) 48%, rgba(147, 145, 154, 0.04) 100%);
+  filter: blur(10px);
+}
+
+.avatarTaskShell .avatarStage {
+  width: 196px;
+  height: 196px;
+  border-radius: 34px;
+  background:
+    radial-gradient(circle at 28% 24%, rgba(255, 255, 255, 0.34) 0%, rgba(255, 255, 255, 0) 48%),
+    linear-gradient(180deg, rgba(241, 239, 240, 0.98) 0%, rgba(236, 235, 236, 0.92) 100%);
+  display: grid;
+  place-items: center;
+}
+
+.avatarTaskShell .avatarClip {
+  width: 164px;
+  height: 164px;
+  border-radius: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.avatarTaskShell .avatarTaskShellImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center center;
+  transform: scale(1.08);
+  transform-origin: center center;
+  display: block;
+}
+
+.avatarTaskShell .avatarTaskShellFallback {
+  color: var(--muted);
+  font-size: 12px;
+  padding: 10px;
+  text-align: center;
+}
+
+.avatarTaskShell .composer {
+  position: relative;
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 16px 16px 18px;
+  border-radius: 26px;
+  border: 1px solid rgba(146, 127, 100, 0.12);
+  background: var(--composer-bg);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 12px 28px rgba(117, 101, 81, 0.08);
+}
+
+.avatarTaskShell .composer:focus-within {
+  border-color: rgba(109, 132, 172, 0.32);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 18px 32px rgba(90, 108, 143, 0.12);
+}
+
+.avatarTaskShell .input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: var(--input-bg);
+  color: var(--text);
+  padding: 16px 18px;
+  border-radius: 18px;
+  font-size: 14px;
+  line-height: 1.5;
+  box-shadow: inset 0 0 0 1px rgba(146, 127, 100, 0.08);
+}
+
+.avatarTaskShell .input::placeholder {
+  color: rgba(42, 51, 61, 0.5);
+}
+
+.avatarTaskShell .input:focus {
+  box-shadow: inset 0 0 0 1px rgba(109, 132, 172, 0.24), 0 0 0 3px rgba(109, 132, 172, 0.08);
+}
+
+.avatarTaskShell .input:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.avatarTaskShell .btn {
+  flex-shrink: 0;
+  min-width: 90px;
+  height: 52px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--accent) 0%, var(--accent-strong) 100%);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 14px 24px rgba(90, 108, 143, 0.22);
+}
+
+.avatarTaskShell .btn:hover:not(:disabled) {
+  filter: brightness(1.02);
+}
+
+.avatarTaskShell .btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+  box-shadow: none;
+}
+
+@keyframes avatar-task-thinking {
+  0%,
+  80%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
