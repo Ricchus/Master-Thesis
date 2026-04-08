@@ -379,11 +379,24 @@ Command + Option + Shift + R
 
 ## 外部 Survey URL
 
-当前仍然使用占位 URL：
+当前已按 round / EMA 配置为 8 份固定问卷：
 
 ```text
-https://example.com/
+Round 1 / EMA 1: https://gatech.co1.qualtrics.com/jfe/form/SV_a9I8QWdCu8nvWjs
+Round 1 / EMA 2: https://gatech.co1.qualtrics.com/jfe/form/SV_6JqGbsDmrQ7GW5o
+Round 1 / EMA 3: https://gatech.co1.qualtrics.com/jfe/form/SV_1A1ScZCjg1SnKAu
+Round 1 / EMA 4: https://gatech.co1.qualtrics.com/jfe/form/SV_6FDWo9PBtbNNLZI
+Round 2 / EMA 1: https://gatech.co1.qualtrics.com/jfe/form/SV_4YpuK5cybC16SEK
+Round 2 / EMA 2: https://gatech.co1.qualtrics.com/jfe/form/SV_6fEXeD3oBv0XMdE
+Round 2 / EMA 3: https://gatech.co1.qualtrics.com/jfe/form/SV_9LFY9RV6CnLQI3Y
+Round 2 / EMA 4: https://gatech.co1.qualtrics.com/jfe/form/SV_87x4PTPFdihypb8
 ```
+
+程序在打开链接时还会额外附加：
+
+- `participant`
+- `round`
+- `ema`
 
 位置在：
 

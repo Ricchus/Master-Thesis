@@ -36,6 +36,21 @@ const TIMELINE: Array<{ id: PhaseId; label: string }> = [
   { id: 'ema4', label: 'EMA 4' }
 ]
 
+const SURVEY_URLS = {
+  1: {
+    1: 'https://gatech.co1.qualtrics.com/jfe/form/SV_a9I8QWdCu8nvWjs',
+    2: 'https://gatech.co1.qualtrics.com/jfe/form/SV_6JqGbsDmrQ7GW5o',
+    3: 'https://gatech.co1.qualtrics.com/jfe/form/SV_1A1ScZCjg1SnKAu',
+    4: 'https://gatech.co1.qualtrics.com/jfe/form/SV_6FDWo9PBtbNNLZI'
+  },
+  2: {
+    1: 'https://gatech.co1.qualtrics.com/jfe/form/SV_4YpuK5cybC16SEK',
+    2: 'https://gatech.co1.qualtrics.com/jfe/form/SV_6fEXeD3oBv0XMdE',
+    3: 'https://gatech.co1.qualtrics.com/jfe/form/SV_9LFY9RV6CnLQI3Y',
+    4: 'https://gatech.co1.qualtrics.com/jfe/form/SV_87x4PTPFdihypb8'
+  }
+} as const
+
 function cloneValue<T>(value: T): T {
   return typeof structuredClone === 'function'
     ? structuredClone(value)
@@ -91,7 +106,16 @@ function currentSectionLabel(round: RoundState) {
 }
 
 function surveyUrl(participantId: string, roundNumber: number, emaIndex: 1 | 2 | 3 | 4) {
-  return `https://example.com/?participant=${encodeURIComponent(participantId)}&round=${roundNumber}&ema=${emaIndex}`
+  const baseUrl = SURVEY_URLS[roundNumber as 1 | 2]?.[emaIndex]
+  if (!baseUrl) {
+    return '#'
+  }
+
+  const url = new URL(baseUrl)
+  url.searchParams.set('participant', participantId)
+  url.searchParams.set('round', String(roundNumber))
+  url.searchParams.set('ema', String(emaIndex))
+  return url.toString()
 }
 
 function getCurrentEmaIndex(phase: PhaseId): 1 | 2 | 3 | 4 | null {
