@@ -16,30 +16,46 @@ function isLoopReadyForState(runtime: AvatarRuntime, state: AnchorState) {
   return runtime.currentState === state && runtime.playbackKind === "loop" && !runtime.isTransitioning;
 }
 
-function isCommandInFlight(runtime: AvatarRuntime, state: AnchorState) {
-  return (
-    runtime.currentState === state ||
-    runtime.targetState === state ||
-    runtime.pendingState === state
-  );
+function isRuntimeReadyForCommand(runtime: AvatarRuntime, command: AvatarCommand) {
+  if (runtime.currentState !== command.state || runtime.playbackKind !== "loop" || runtime.isTransitioning) {
+    return false;
+  }
+
+  if (!command.shouldHold) {
+    return true;
+  }
+
+  return runtime.renderModel?.loopMode === "repeat";
+}
+
+function isSameCommandStillInFlight(runtime: AvatarRuntime, command: AvatarCommand) {
+  if (runtime.pendingState === command.state || runtime.targetState === command.state) {
+    return true;
+  }
+
+  if (runtime.currentState !== command.state) {
+    return false;
+  }
+
+  return runtime.isTransitioning;
 }
 
 export function useAvatarReplyCoordinator({
   activeMessageId,
+  avatarRevealBudgetMs,
   beginReveal,
   completeActive,
   controller,
-  explainRevealBudgetMs,
   hasInput,
   isLoading,
   phase,
   runtime
 }: {
   activeMessageId: string | null;
+  avatarRevealBudgetMs: number;
   beginReveal: (maxRevealDurationMs: number) => void;
   completeActive: (messageId: string) => void;
   controller: AvatarController;
-  explainRevealBudgetMs: number;
   hasInput: boolean;
   isLoading: boolean;
   phase: AssistantReplyPlaybackPhase;
@@ -48,22 +64,22 @@ export function useAvatarReplyCoordinator({
   const lastIssuedCommandRef = useRef<string | null>(null);
   const [startupPhase, setStartupPhase] = useState<"pending" | "requested" | "awaiting_settle" | "done">("pending");
   const speakingLoopReady = isLoopReadyForState(runtime, "speaking_explain");
-  const settledOutOfExplain =
-    runtime.currentState !== "speaking_explain" &&
-    runtime.playbackKind === "loop" &&
-    !runtime.isTransitioning;
   const warmLoopReady = isLoopReadyForState(runtime, "warm_friendly");
   const startupSettled =
     startupPhase === "awaiting_settle" &&
     runtime.currentState !== "warm_friendly" &&
     runtime.playbackKind === "loop" &&
     !runtime.isTransitioning;
-  const hasActiveReplySession = Boolean(activeMessageId) && (
+  const isReplySessionOpen = Boolean(activeMessageId) && (
     phase === "awaiting_start" ||
     phase === "revealing" ||
     phase === "awaiting_settle"
   );
-  const shouldSkipStartupWarm = isLoading || hasInput || hasActiveReplySession;
+  const shouldDriveSpeaking = Boolean(activeMessageId) && (
+    phase === "awaiting_start" ||
+    phase === "revealing"
+  );
+  const shouldSkipStartupWarm = isLoading || hasInput || isReplySessionOpen;
 
   useEffect(() => {
     if (startupPhase === "done") {
@@ -95,7 +111,7 @@ export function useAvatarReplyCoordinator({
       return { key: "thinking", state: "thinking_process", shouldHold: true };
     }
 
-    if (hasActiveReplySession && activeMessageId) {
+    if (shouldDriveSpeaking && activeMessageId) {
       return { key: `speaking:${activeMessageId}`, state: "speaking_explain", shouldHold: false };
     }
 
@@ -108,7 +124,11 @@ export function useAvatarReplyCoordinator({
     }
 
     return { key: "idle", state: "idle_neutral", shouldHold: true };
-  }, [activeMessageId, hasActiveReplySession, hasInput, isLoading, startupPhase]);
+  }, [activeMessageId, hasInput, isLoading, shouldDriveSpeaking, startupPhase]);
+  const settleCommandReady =
+    phase === "awaiting_settle" &&
+    desiredAvatarCommand.state !== "speaking_explain" &&
+    isRuntimeReadyForCommand(runtime, desiredAvatarCommand);
 
   useEffect(() => {
     if (!activeMessageId || phase !== "awaiting_start" || speakingLoopReady) {
@@ -116,26 +136,26 @@ export function useAvatarReplyCoordinator({
     }
 
     const timeoutId = window.setTimeout(() => {
-      beginReveal(explainRevealBudgetMs);
+      beginReveal(avatarRevealBudgetMs);
     }, START_TIMEOUT_MS);
 
     return () => window.clearTimeout(timeoutId);
-  }, [activeMessageId, beginReveal, explainRevealBudgetMs, phase, speakingLoopReady]);
+  }, [activeMessageId, avatarRevealBudgetMs, beginReveal, phase, speakingLoopReady]);
 
   useEffect(() => {
     if (!activeMessageId || phase !== "awaiting_start" || !speakingLoopReady) {
       return;
     }
 
-    beginReveal(explainRevealBudgetMs);
-  }, [activeMessageId, beginReveal, explainRevealBudgetMs, phase, speakingLoopReady]);
+    beginReveal(avatarRevealBudgetMs);
+  }, [activeMessageId, avatarRevealBudgetMs, beginReveal, phase, speakingLoopReady]);
 
   useEffect(() => {
     if (!activeMessageId || phase !== "awaiting_settle") {
       return;
     }
 
-    if (settledOutOfExplain) {
+    if (settleCommandReady) {
       completeActive(activeMessageId);
       return;
     }
@@ -145,10 +165,10 @@ export function useAvatarReplyCoordinator({
     }, SETTLE_TIMEOUT_MS);
 
     return () => window.clearTimeout(timeoutId);
-  }, [activeMessageId, completeActive, phase, settledOutOfExplain]);
+  }, [activeMessageId, completeActive, phase, settleCommandReady]);
 
   useEffect(() => {
-    const commandReady = isLoopReadyForState(runtime, desiredAvatarCommand.state);
+    const commandReady = isRuntimeReadyForCommand(runtime, desiredAvatarCommand);
     if (commandReady) {
       lastIssuedCommandRef.current = desiredAvatarCommand.key;
       return;
@@ -158,7 +178,7 @@ export function useAvatarReplyCoordinator({
       return;
     }
 
-    if (lastIssuedCommandRef.current === desiredAvatarCommand.key && isCommandInFlight(runtime, desiredAvatarCommand.state)) {
+    if (lastIssuedCommandRef.current === desiredAvatarCommand.key && isSameCommandStillInFlight(runtime, desiredAvatarCommand)) {
       return;
     }
 

@@ -193,6 +193,14 @@ export function createAvatarController({ manifest, onRuntimeChange }: CreateAvat
     );
   }
 
+  function buildAutoSettleOptions(state: AnchorState): StateRequestOptions | undefined {
+    if (NON_HOLDABLE_STATES.has(state)) {
+      return undefined;
+    }
+
+    return { shouldHold: true };
+  }
+
   function applyLoopBehavior(state: AnchorState, options?: StateRequestOptions) {
     const behavior = STATE_BEHAVIOR[state];
     const shouldHold = NON_HOLDABLE_STATES.has(state) ? false : (options?.shouldHold ?? false);
@@ -259,7 +267,7 @@ export function createAvatarController({ manifest, onRuntimeChange }: CreateAvat
       ) {
         const pending = takePendingRequest();
         if (pending) {
-          requestState(pending.state, pending.options);
+          requestStateInternal(pending.state, pending.options, false);
           return;
         }
       }
@@ -269,7 +277,7 @@ export function createAvatarController({ manifest, onRuntimeChange }: CreateAvat
         runtime.remainingLoopsBeforeAutoSettle !== null &&
         runtime.remainingLoopsBeforeAutoSettle <= 1
       ) {
-        requestState(runtime.autoSettleTo);
+        requestStateInternal(runtime.autoSettleTo, buildAutoSettleOptions(runtime.autoSettleTo), false);
         return;
       }
 
@@ -335,7 +343,7 @@ export function createAvatarController({ manifest, onRuntimeChange }: CreateAvat
     });
   }
 
-  function requestState(nextState: AnchorState, options?: StateRequestOptions) {
+  function requestStateInternal(nextState: AnchorState, options?: StateRequestOptions, allowQueue = true) {
     if (options?.isActiveTrigger) {
       if (runtime.currentState === nextState && !runtime.isTransitioning) {
         setAcceleratedTarget(null);
@@ -344,7 +352,7 @@ export function createAvatarController({ manifest, onRuntimeChange }: CreateAvat
       }
     }
 
-    if (runtime.isTransitioning || shouldQueueUntilCurrentLoopEnds(nextState, options)) {
+    if (runtime.isTransitioning || (allowQueue && shouldQueueUntilCurrentLoopEnds(nextState, options))) {
       if (pendingRequest?.state === nextState) {
         return;
       }
@@ -415,6 +423,10 @@ export function createAvatarController({ manifest, onRuntimeChange }: CreateAvat
       .map((leg) => `${leg.from} -> ${leg.to}${leg.direction === "reverse" ? "（倒放）" : ""}`)
       .join(" -> ");
     playTransitionLegs(plan.legs, nextState, options);
+  }
+
+  function requestState(nextState: AnchorState, options?: StateRequestOptions) {
+    requestStateInternal(nextState, options, true);
   }
 
   function boot() {

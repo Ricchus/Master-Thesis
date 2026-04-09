@@ -208,6 +208,8 @@ npm run build
   - `createdAt`
 - 不要再把 reveal / queued / static 这种 UI 播放状态写回 `ConversationMessage`
 - `assistantBusy` 只表示“请求是否还在飞行中”，不表示“assistant 回复是否已经 reveal 完成”
+- assistant 的文本风格、人设、prompt-level persona 差异也应放在 `src/lib/assistant.ts`
+- 不要在 shell、reply playback queue、avatar coordinator 或 GIF 播放层拼接人格化文案
 
 ### 3. Shared assistant reply playback queue
 
@@ -293,12 +295,15 @@ npm run build
   - explain 启动超时兜底
   - explain 结束后的 settle
   - 对 hold state 的 runtime 对齐
+  - avatar reveal 预算与 explain 收尾缓冲的协调
 
 关键约束：
 
 - 后续如果要改 avatar 行为，优先改这个文件
 - 不要再在 shell 内部、button handler、或别的 effect 里直接 `controller.requestState(...)`
 - 不要再让多个地方同时写 avatar controller
+- `awaiting_settle` 阶段不要继续强制维持 `speaking_explain`
+- 文本 reveal 不应吃满 explain 全部时长，需给 explain 自然收尾留出小缓冲
 
 当前单一写入源原则：
 
@@ -331,6 +336,8 @@ npm run build
 - 当前 GIF 的播放方式已经恢复为原 avatar demo 风格的播放器，不是普通 `<img>` 定时切换
 - 如果问题属于“回复什么时候开始 reveal”“avatar 什么时候进 explain”“为什么多次请求导致动作乱跳”，优先检查 coordinator / queue，不要先改 GIF 播放器
 - 只有在确认问题真的是媒体解码、帧时序、canvas 渲染层的问题时，才应修改 `AvatarMediaPlayer.tsx` 或 `gifPlayback.ts`
+- controller 在 loop 自然结束后推进 pending / auto-settle 时，不应再把同一个目标重新排回等待队列
+- 对 `idle / listening / thinking` 这类 hold 状态，只有进入 `repeat` loop 才算真正稳定；`once` loop 末帧不应被视为 ready
 
 ### 7. 两种 shell 的关系
 

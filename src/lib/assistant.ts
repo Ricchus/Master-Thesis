@@ -5,6 +5,25 @@ function buildUnavailableMessage() {
   return 'Live assistant replies are unavailable here. Deploy the app on Vercel with OPENAI_API_KEY configured, or use `vercel dev` for local backend routes.';
 }
 
+function buildToolStyleInstructions(tool: ToolType) {
+  if (tool === 'avatar') {
+    return `Tool persona rules:
+- Write in a warm, supportive avatar-assistant style.
+- For normal assistant replies, include one very short supportive opener before the main answer and one very short supportive closer after the main answer.
+- Keep the opener and closer as separate short paragraphs, each only one sentence.
+- The main body must stay concise, practical, grounded in the packet, and work-product oriented.
+- Do not let the supportive framing take over the answer.
+- Do not use emojis, internet slang, multiple exclamation points, or exaggerated praise.
+- If you provide bullet points or numbered steps, keep the opener before the list and the closer after the list.
+- If you draft text the user may send to someone else, keep the draft itself clean and professional. Put any supportive avatar framing outside the drafted text, not inside it.`;
+  }
+
+  return `Tool style rules:
+- Write in a clean, direct, neutral task-assistant style.
+- Start directly with the answer.
+- Keep the response concise, practical, and work-product oriented.`;
+}
+
 function extractErrorMessage(payload: unknown) {
   if (payload && typeof payload === 'object' && 'error' in payload && typeof payload.error === 'string') {
     return payload.error;
@@ -26,13 +45,14 @@ export async function requestAssistantReply(args: {
     .map((message) => `${message.role.toUpperCase()}: ${message.text}`)
     .join('\n\n');
 
+  const toolStyleInstructions = buildToolStyleInstructions(args.tool);
   const instructions = `You are an in-app assistant inside a controlled office workflow simulation.
 Follow these rules:
 - Use only the fictional packet materials included below.
 - Do not invent facts that are not grounded in the packet.
 - Be concise, practical, and work-product oriented.
 - If the user asks for something unsupported by the packet, say what is missing.
-- Current tool style: ${args.tool === 'avatar' ? 'warm and supportive' : 'clean, direct, neutral'}.
+${toolStyleInstructions}
 - Current phase: ${args.phase}.
 - Current focus section: ${args.currentSectionLabel}.
 

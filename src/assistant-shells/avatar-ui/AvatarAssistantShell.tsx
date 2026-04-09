@@ -61,6 +61,7 @@ const BUBBLE_TAIL_ROOT_LOWER_MAX_DISTANCE_FROM_BOTTOM = 12;
 // Retained crop of the original demo after removing the top control strip.
 const STAGE_WIDTH = 980;
 const STAGE_HEIGHT = 456;
+const EXPLAIN_SETTLE_BUFFER_MS = 350;
 
 function formatClock(ts: number) {
   return new Date(ts).toLocaleTimeString([], {
@@ -401,6 +402,9 @@ export function AvatarAssistantShell({ messages, isLoading, onSend, disabled }: 
     runtime.currentLoopAsset
       ? runtime.currentLoopAsset.durationMs
       : defaultExplainBudgetMs;
+  const avatarRevealBudgetMs = explainRevealBudgetMs > EXPLAIN_SETTLE_BUFFER_MS
+    ? explainRevealBudgetMs - EXPLAIN_SETTLE_BUFFER_MS
+    : explainRevealBudgetMs;
   const replyPlayback = useAssistantReplyPlayback({
     conversationKey,
     messages
@@ -411,10 +415,10 @@ export function AvatarAssistantShell({ messages, isLoading, onSend, disabled }: 
   usePreloadedAvatarAssets(manifest);
   useAvatarReplyCoordinator({
     activeMessageId,
+    avatarRevealBudgetMs,
     beginReveal: startReveal,
     completeActive,
     controller,
-    explainRevealBudgetMs,
     hasInput,
     isLoading,
     phase,
