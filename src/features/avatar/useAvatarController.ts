@@ -24,9 +24,7 @@ export function useAvatarController() {
 
   useEffect(() => {
     controller.reset();
-    const bootTimer = window.setTimeout(() => controller.boot(), 250);
     return () => {
-      window.clearTimeout(bootTimer);
       controller.dispose();
     };
   }, [controller]);

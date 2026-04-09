@@ -16,16 +16,32 @@ type Props = {
 export function ChatgptAssistantShell({ messages, isLoading, onSend, disabled }: Props) {
   const [input, setInput] = useState('');
   const listRef = useRef<HTMLDivElement | null>(null);
+  const conversationKey = messages[0]?.id ?? 'empty-conversation';
   const replyPlayback = useAssistantReplyPlayback({
-    messages,
-    isLoading,
-    canStartReveal: !isLoading,
-    maxRevealDurationMs: getExplainRevealBudgetMs()
+    conversationKey,
+    messages
   });
+  const revealBudgetMs = getExplainRevealBudgetMs();
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, isLoading, replyPlayback.phase]);
+
+  useEffect(() => {
+    if (isLoading || replyPlayback.phase !== 'awaiting_start') {
+      return;
+    }
+
+    replyPlayback.startReveal(revealBudgetMs);
+  }, [isLoading, replyPlayback, revealBudgetMs]);
+
+  useEffect(() => {
+    if (!replyPlayback.activeMessageId || replyPlayback.phase !== 'awaiting_settle') {
+      return;
+    }
+
+    replyPlayback.completeActive(replyPlayback.activeMessageId);
+  }, [replyPlayback]);
 
   function scrollToBottom() {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
@@ -33,7 +49,6 @@ export function ChatgptAssistantShell({ messages, isLoading, onSend, disabled }:
 
   function handleAssistantRevealComplete(messageId: string) {
     replyPlayback.markRevealComplete(messageId);
-    replyPlayback.completeSession(messageId);
   }
 
   async function handleSubmit(event: React.FormEvent) {
@@ -53,6 +68,10 @@ export function ChatgptAssistantShell({ messages, isLoading, onSend, disabled }:
             ? replyPlayback.getMessageRenderMode(message.id)
             : 'static';
 
+          if (renderMode === 'queued') {
+            return null;
+          }
+
           return (
             <div key={message.id} className={`assistantMsgRow ${message.role}`}>
               <div className={`assistantMsgBubble ${message.role} ${renderMode === 'revealing' ? 'revealing' : ''}`}>
@@ -60,14 +79,11 @@ export function ChatgptAssistantShell({ messages, isLoading, onSend, disabled }:
                   <AnimatedAssistantText
                     text={message.text}
                     animate
+                    className="assistantMsgStructuredText"
                     durationMs={replyPlayback.revealDurationMs}
                     onRevealStep={scrollToBottom}
                     onRevealComplete={() => handleAssistantRevealComplete(message.id)}
                   />
-                ) : renderMode === 'queued' ? (
-                  <div aria-hidden="true" style={{ visibility: 'hidden' }}>
-                    <FormattedAssistantText className="assistantMsgStructuredText" text={message.text} />
-                  </div>
                 ) : (
                   <FormattedAssistantText className="assistantMsgStructuredText" text={message.text} />
                 )}

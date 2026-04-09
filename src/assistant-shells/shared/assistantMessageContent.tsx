@@ -1,4 +1,4 @@
-import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, memo, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 const DEFAULT_REVEAL_CHARACTERS_PER_SECOND = 48;
 const MIN_REVEAL_DURATION_MS = 900;
@@ -7,6 +7,15 @@ type MessageBlock =
   | { type: "paragraph"; lines: string[] }
   | { type: "unordered-list"; items: string[] }
   | { type: "ordered-list"; items: string[]; start: number };
+
+type StructuredTextUnit = {
+  segments: string[];
+};
+
+type PreparedMessageBlock =
+  | { type: "paragraph"; lines: StructuredTextUnit[] }
+  | { type: "unordered-list"; items: StructuredTextUnit[] }
+  | { type: "ordered-list"; items: StructuredTextUnit[]; start: number };
 
 function splitTextForReveal(text: string) {
   const Segmenter = (Intl as typeof Intl & {
@@ -161,8 +170,138 @@ function parseMessageText(text: string): MessageBlock[] {
   return blocks;
 }
 
+function prepareMessageBlocks(text: string): PreparedMessageBlock[] {
+  return parseMessageText(text).map((block) => {
+    if (block.type === "paragraph") {
+      return {
+        type: "paragraph",
+        lines: block.lines.map((line) => ({ segments: splitTextForReveal(line) }))
+      };
+    }
+
+    if (block.type === "unordered-list") {
+      return {
+        type: "unordered-list",
+        items: block.items.map((item) => ({ segments: splitTextForReveal(item) }))
+      };
+    }
+
+    return {
+      type: "ordered-list",
+      start: block.start,
+      items: block.items.map((item) => ({ segments: splitTextForReveal(item) }))
+    };
+  });
+}
+
+function getPreparedMessageSegmentCount(blocks: PreparedMessageBlock[]) {
+  return blocks.reduce((total, block) => {
+    if (block.type === "paragraph") {
+      return total + block.lines.reduce((lineTotal, line) => lineTotal + line.segments.length, 0);
+    }
+
+    return total + block.items.reduce((itemTotal, item) => itemTotal + item.segments.length, 0);
+  }, 0);
+}
+
+function renderVisibleUnits(units: StructuredTextUnit[], remainingVisibleCount: number) {
+  if (remainingVisibleCount <= 0) {
+    return { nextRemainingVisibleCount: remainingVisibleCount, visibleTexts: [] as string[] };
+  }
+
+  const visibleTexts: string[] = [];
+  let nextRemainingVisibleCount = remainingVisibleCount;
+
+  for (const unit of units) {
+    if (nextRemainingVisibleCount <= 0) {
+      break;
+    }
+
+    const visibleSegments = Math.min(unit.segments.length, nextRemainingVisibleCount);
+    if (visibleSegments <= 0) {
+      break;
+    }
+
+    visibleTexts.push(unit.segments.slice(0, visibleSegments).join(""));
+    nextRemainingVisibleCount -= visibleSegments;
+
+    if (visibleSegments < unit.segments.length) {
+      break;
+    }
+  }
+
+  return {
+    nextRemainingVisibleCount,
+    visibleTexts
+  };
+}
+
+function renderStructuredMessage(blocks: PreparedMessageBlock[], className: string, visibleCount?: number) {
+  const nodes: ReactNode[] = [];
+  let remainingVisibleCount = visibleCount ?? Number.POSITIVE_INFINITY;
+
+  for (const [blockIndex, block] of blocks.entries()) {
+    if (remainingVisibleCount <= 0) {
+      break;
+    }
+
+    if (block.type === "paragraph") {
+      const { nextRemainingVisibleCount, visibleTexts } = renderVisibleUnits(block.lines, remainingVisibleCount);
+      remainingVisibleCount = nextRemainingVisibleCount;
+
+      if (visibleTexts.length === 0) {
+        continue;
+      }
+
+      nodes.push(
+        <p key={blockIndex}>
+          {visibleTexts.map((line, lineIndex) => (
+            <Fragment key={`${blockIndex}-${lineIndex}`}>
+              {line}
+              {lineIndex < visibleTexts.length - 1 ? <br /> : null}
+            </Fragment>
+          ))}
+        </p>
+      );
+      continue;
+    }
+
+    const { nextRemainingVisibleCount, visibleTexts } = renderVisibleUnits(block.items, remainingVisibleCount);
+    remainingVisibleCount = nextRemainingVisibleCount;
+
+    if (visibleTexts.length === 0) {
+      continue;
+    }
+
+    if (block.type === "unordered-list") {
+      nodes.push(
+        <ul key={blockIndex}>
+          {visibleTexts.map((item, itemIndex) => (
+            <li key={itemIndex}>{item}</li>
+          ))}
+        </ul>
+      );
+      continue;
+    }
+
+    nodes.push(
+      <ol key={blockIndex} start={block.start}>
+        {visibleTexts.map((item, itemIndex) => (
+          <li key={itemIndex}>{item}</li>
+        ))}
+      </ol>
+    );
+  }
+
+  if (nodes.length === 0) {
+    return null;
+  }
+
+  return <div className={className}>{nodes}</div>;
+}
+
 export function getAssistantRevealDurationMs(text: string, maxDurationMs: number) {
-  const segmentCount = splitTextForReveal(text).length;
+  const segmentCount = getPreparedMessageSegmentCount(prepareMessageBlocks(text));
   if (segmentCount === 0) {
     return 0;
   }
@@ -174,19 +313,22 @@ export function getAssistantRevealDurationMs(text: string, maxDurationMs: number
 
 export const AnimatedAssistantText = memo(function AnimatedAssistantText({
   animate,
+  className = "messageTextStructured",
   durationMs,
   onRevealComplete,
   onRevealStep,
   text
 }: {
   animate: boolean;
+  className?: string;
   durationMs: number;
   onRevealComplete?: () => void;
   onRevealStep?: () => void;
   text: string;
 }) {
-  const segments = useMemo(() => splitTextForReveal(text), [text]);
-  const [visibleCount, setVisibleCount] = useState(animate ? 0 : segments.length);
+  const preparedBlocks = useMemo(() => prepareMessageBlocks(text), [text]);
+  const totalVisibleSegments = useMemo(() => getPreparedMessageSegmentCount(preparedBlocks), [preparedBlocks]);
+  const [visibleCount, setVisibleCount] = useState(animate ? 0 : totalVisibleSegments);
   const frameRef = useRef<number | null>(null);
   const startedAtRef = useRef<number | null>(null);
   const visibleCountRef = useRef(visibleCount);
@@ -198,7 +340,7 @@ export const AnimatedAssistantText = memo(function AnimatedAssistantText({
 
   useEffect(() => {
     revealCompletedRef.current = false;
-  }, [animate, segments]);
+  }, [animate, totalVisibleSegments]);
 
   useLayoutEffect(() => {
     if (animate && visibleCount > 0) {
@@ -207,37 +349,37 @@ export const AnimatedAssistantText = memo(function AnimatedAssistantText({
   }, [animate, onRevealStep, visibleCount]);
 
   useEffect(() => {
-    if (!animate || revealCompletedRef.current || visibleCount < segments.length) {
+    if (!animate || revealCompletedRef.current || visibleCount < totalVisibleSegments) {
       return;
     }
 
     revealCompletedRef.current = true;
     onRevealComplete?.();
-  }, [animate, onRevealComplete, segments.length, visibleCount]);
+  }, [animate, onRevealComplete, totalVisibleSegments, visibleCount]);
 
   useEffect(() => {
     if (!animate) {
-      visibleCountRef.current = segments.length;
-      setVisibleCount(segments.length);
+      visibleCountRef.current = totalVisibleSegments;
+      setVisibleCount(totalVisibleSegments);
       return;
     }
 
-    if (segments.length === 0) {
+    if (totalVisibleSegments === 0) {
       visibleCountRef.current = 0;
       setVisibleCount(0);
       return;
     }
 
     if (durationMs <= 0) {
-      visibleCountRef.current = segments.length;
-      setVisibleCount(segments.length);
+      visibleCountRef.current = totalVisibleSegments;
+      setVisibleCount(totalVisibleSegments);
       return;
     }
 
     visibleCountRef.current = 0;
     setVisibleCount(0);
     startedAtRef.current = null;
-    const msPerSegment = durationMs / segments.length;
+    const msPerSegment = durationMs / totalVisibleSegments;
 
     const revealNextFrame = (now: number) => {
       if (startedAtRef.current === null) {
@@ -245,14 +387,14 @@ export const AnimatedAssistantText = memo(function AnimatedAssistantText({
       }
 
       const elapsed = now - startedAtRef.current;
-      const nextCount = Math.min(segments.length, Math.floor(elapsed / msPerSegment) + 1);
+      const nextCount = Math.min(totalVisibleSegments, Math.floor(elapsed / msPerSegment) + 1);
 
       if (nextCount !== visibleCountRef.current) {
         visibleCountRef.current = nextCount;
         setVisibleCount(nextCount);
       }
 
-      if (nextCount < segments.length) {
+      if (nextCount < totalVisibleSegments) {
         frameRef.current = window.requestAnimationFrame(revealNextFrame);
       }
     };
@@ -266,9 +408,9 @@ export const AnimatedAssistantText = memo(function AnimatedAssistantText({
       }
       startedAtRef.current = null;
     };
-  }, [animate, durationMs, segments]);
+  }, [animate, durationMs, totalVisibleSegments]);
 
-  return <>{segments.slice(0, visibleCount).join("")}</>;
+  return renderStructuredMessage(preparedBlocks, className, visibleCount);
 });
 
 export const FormattedAssistantText = memo(function FormattedAssistantText({
@@ -278,46 +420,6 @@ export const FormattedAssistantText = memo(function FormattedAssistantText({
   className?: string;
   text: string;
 }) {
-  const blocks = useMemo(() => parseMessageText(text), [text]);
-
-  if (blocks.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className={className}>
-      {blocks.map((block, blockIndex) => {
-        if (block.type === "unordered-list") {
-          return (
-            <ul key={blockIndex}>
-              {block.items.map((item, itemIndex) => (
-                <li key={itemIndex}>{item}</li>
-              ))}
-            </ul>
-          );
-        }
-
-        if (block.type === "ordered-list") {
-          return (
-            <ol key={blockIndex} start={block.start}>
-              {block.items.map((item, itemIndex) => (
-                <li key={itemIndex}>{item}</li>
-              ))}
-            </ol>
-          );
-        }
-
-        return (
-          <p key={blockIndex}>
-            {block.lines.map((line, lineIndex) => (
-              <Fragment key={`${blockIndex}-${lineIndex}`}>
-                {line}
-                {lineIndex < block.lines.length - 1 ? <br /> : null}
-              </Fragment>
-            ))}
-          </p>
-        );
-      })}
-    </div>
-  );
+  const preparedBlocks = useMemo(() => prepareMessageBlocks(text), [text]);
+  return renderStructuredMessage(preparedBlocks, className);
 });

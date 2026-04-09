@@ -2,3 +2,5 @@ node_modules
 dist
 src/config/openai.local.ts
 .DS_Store
+.vercel
+.env*.local

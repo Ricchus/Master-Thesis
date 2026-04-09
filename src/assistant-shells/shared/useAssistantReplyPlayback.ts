@@ -4,11 +4,11 @@ import type { AvatarManifest } from "../../features/avatar/types";
 import type { ConversationMessage } from "../../lib/types";
 import { getAssistantRevealDurationMs } from "./assistantMessageContent";
 
-export type AssistantReplyPlaybackPhase = "idle" | "queued" | "revealing" | "revealed_waiting";
+export type AssistantReplyPlaybackPhase = "idle" | "awaiting_start" | "revealing" | "awaiting_settle";
 export type AssistantMessageRenderMode = "static" | "queued" | "revealing";
 
-function getLatestAssistantMessage(messages: ConversationMessage[]) {
-  return [...messages].reverse().find((message) => message.role === "assistant") ?? null;
+function getAssistantMessages(messages: ConversationMessage[]) {
+  return messages.filter((message) => message.role === "assistant");
 }
 
 export function getExplainRevealBudgetMs(sourceManifest: AvatarManifest = manifest) {
@@ -21,90 +21,123 @@ export function getExplainRevealBudgetMs(sourceManifest: AvatarManifest = manife
 }
 
 export function useAssistantReplyPlayback({
-  canStartReveal,
-  isLoading,
-  maxRevealDurationMs,
+  conversationKey,
   messages
 }: {
-  canStartReveal: boolean;
-  isLoading: boolean;
-  maxRevealDurationMs: number;
+  conversationKey: string;
   messages: ConversationMessage[];
 }) {
-  const latestAssistantMessage = useMemo(() => getLatestAssistantMessage(messages), [messages]);
-  const completedMessageIdsRef = useRef<Set<string>>(new Set());
-  const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
+  const assistantMessages = useMemo(() => getAssistantMessages(messages), [messages]);
+  const [queuedMessageIds, setQueuedMessageIds] = useState<string[]>([]);
   const [phase, setPhase] = useState<AssistantReplyPlaybackPhase>("idle");
   const [revealDurationMs, setRevealDurationMs] = useState(0);
+  const initializedConversationKeyRef = useRef<string | null>(null);
+  const seenAssistantIdsRef = useRef<Set<string>>(new Set());
+
+  const activeMessageId = queuedMessageIds[0] ?? null;
+  const activeMessage = useMemo(
+    () => assistantMessages.find((message) => message.id === activeMessageId) ?? null,
+    [activeMessageId, assistantMessages]
+  );
 
   useLayoutEffect(() => {
-    if (!latestAssistantMessage) {
+    const seedSeenIds = new Set(assistantMessages.map((message) => message.id));
+    if (initializedConversationKeyRef.current !== conversationKey) {
+      initializedConversationKeyRef.current = conversationKey;
+      seenAssistantIdsRef.current = seedSeenIds;
+      setQueuedMessageIds([]);
+      setPhase("idle");
+      setRevealDurationMs(0);
       return;
     }
 
-    if (latestAssistantMessage.id === activeMessageId || completedMessageIdsRef.current.has(latestAssistantMessage.id)) {
-      return;
+    const nextQueuedIds: string[] = [];
+    for (const message of assistantMessages) {
+      if (seenAssistantIdsRef.current.has(message.id)) {
+        continue;
+      }
+
+      seenAssistantIdsRef.current.add(message.id);
+      nextQueuedIds.push(message.id);
     }
 
-    setActiveMessageId(latestAssistantMessage.id);
-    setPhase("queued");
-    setRevealDurationMs(0);
-  }, [activeMessageId, latestAssistantMessage]);
+    if (nextQueuedIds.length > 0) {
+      setQueuedMessageIds((current) => [...current, ...nextQueuedIds]);
+    }
+  }, [assistantMessages, conversationKey]);
 
   useEffect(() => {
-    if (!activeMessageId || phase !== "queued" || isLoading || !canStartReveal) {
+    if (!activeMessageId) {
+      if (phase !== "idle") {
+        setPhase("idle");
+        setRevealDurationMs(0);
+      }
       return;
     }
 
-    const activeMessage = messages.find((message) => message.id === activeMessageId && message.role === "assistant");
+    if (phase === "idle") {
+      setPhase("awaiting_start");
+    }
+  }, [activeMessageId, phase]);
+
+  const startReveal = useCallback((maxRevealDurationMs: number) => {
+    if (!activeMessageId || phase !== "awaiting_start") {
+      return;
+    }
+
     const nextDurationMs = getAssistantRevealDurationMs(activeMessage?.text ?? "", maxRevealDurationMs);
     setRevealDurationMs(nextDurationMs);
     setPhase("revealing");
-  }, [activeMessageId, canStartReveal, isLoading, maxRevealDurationMs, messages, phase]);
+  }, [activeMessage, activeMessageId, phase]);
 
   const markRevealComplete = useCallback((messageId: string) => {
+    if (!activeMessageId || messageId !== activeMessageId || phase !== "revealing") {
+      return;
+    }
+
+    setPhase("awaiting_settle");
+  }, [activeMessageId, phase]);
+
+  const completeActive = useCallback((messageId: string) => {
     if (!activeMessageId || messageId !== activeMessageId) {
       return;
     }
 
-    completedMessageIdsRef.current.add(messageId);
-    setPhase("revealed_waiting");
-  }, [activeMessageId]);
-
-  const completeSession = useCallback((messageId: string) => {
-    if (!activeMessageId || messageId !== activeMessageId) {
-      return;
-    }
-
-    completedMessageIdsRef.current.add(messageId);
-    setActiveMessageId(null);
-    setPhase("idle");
+    setQueuedMessageIds((current) => current.filter((id) => id !== messageId));
     setRevealDurationMs(0);
-  }, [activeMessageId]);
+    setPhase(queuedMessageIds.length > 1 ? "awaiting_start" : "idle");
+  }, [activeMessageId, queuedMessageIds.length]);
+
+  const queuedMessageIdsSet = useMemo(() => new Set(queuedMessageIds), [queuedMessageIds]);
 
   const getMessageRenderMode = useCallback((messageId: string): AssistantMessageRenderMode => {
-    if (activeMessageId !== messageId) {
+    if (!queuedMessageIdsSet.has(messageId)) {
       return "static";
     }
 
-    if (phase === "queued") {
-      return "queued";
+    if (activeMessageId === messageId) {
+      if (phase === "revealing") {
+        return "revealing";
+      }
+
+      if (phase === "awaiting_start") {
+        return "queued";
+      }
+
+      return "static";
     }
 
-    if (phase === "revealing") {
-      return "revealing";
-    }
-
-    return "static";
-  }, [activeMessageId, phase]);
+    return "queued";
+  }, [activeMessageId, phase, queuedMessageIdsSet]);
 
   return {
     activeMessageId,
+    activeMessageText: activeMessage?.text ?? "",
+    completeActive,
     getMessageRenderMode,
-    latestAssistantMessage,
+    markRevealComplete,
     phase,
     revealDurationMs,
-    markRevealComplete,
-    completeSession
+    startReveal
   };
 }

@@ -118,6 +118,22 @@ http://localhost:5173
 - live assistant reply 与 AI validation 现在走 `/api/*`
 - 如果你没有同时运行 Vercel 的本地函数环境，那么 assistant 会提示 backend 不可用，validation 会自动退回规则检查
 
+### 3.1 本地联调前端 + `/api/*`
+
+如果要在本地完整测试 assistant 对话与 AI validation，而不只是预览前端 UI，请使用：
+
+```bash
+npx vercel dev
+```
+
+说明：
+
+- 这会同时启动前端和 `api/` 目录下的本地 serverless functions
+- 第一次运行如果本机没有 Vercel CLI，`npx` 会自动拉起临时执行环境
+- 如果本地也要真实调用 OpenAI，需要在当前 shell 环境或 Vercel 本地环境里提供：
+  - `OPENAI_API_KEY`
+  - `OPENAI_MODEL`
+
 ### 4. 生产构建
 
 ```bash
@@ -147,6 +163,233 @@ npm run build
 - assistant chat 走 `/api/chat`
 - AI validation 走 `/api/validate`
 - 浏览器端不再持有 OpenAI key
+
+---
+
+## 当前技术框架（重要）
+
+这一节是为了防止后续换一个新对话后，因为缺少上下文而把当前已经稳定下来的结构再次改坏。
+如果后续要修改 assistant、avatar、消息 reveal 或 GIF 切换逻辑，建议先读完这一节。
+
+### 1. 总体分层
+
+当前程序和 assistant 相关的结构，分成 5 层：
+
+1. `App.tsx` 的 transcript / request 层
+2. shared assistant reply playback queue
+3. shared text rendering 层
+4. avatar reply coordination 层
+5. avatar media playback 层
+
+这 5 层职责已经刻意拆开。后续修改时，优先在正确的那一层修问题，不要跨层补丁。
+
+### 2. Transcript / request 层
+
+核心文件：
+
+- `src/App.tsx`
+- `src/lib/assistant.ts`
+- `src/lib/types.ts`
+
+职责：
+
+- 持有整轮真实消息 transcript：`RoundState.chatMessages`
+- 用户发送消息时先写入 user message
+- 发起 `/api/chat`
+- 收到结果后再写入 assistant message
+- 维护 `assistantBusy`
+
+关键约束：
+
+- `ConversationMessage` 只表示消息本身：
+  - `id`
+  - `role`
+  - `text`
+  - `createdAt`
+- 不要再把 reveal / queued / static 这种 UI 播放状态写回 `ConversationMessage`
+- `assistantBusy` 只表示“请求是否还在飞行中”，不表示“assistant 回复是否已经 reveal 完成”
+
+### 3. Shared assistant reply playback queue
+
+核心文件：
+
+- `src/assistant-shells/shared/useAssistantReplyPlayback.ts`
+
+职责：
+
+- 这是当前 assistant 回复 reveal 的单一真相源
+- 它负责把“挂载后新出现的 assistant 消息”加入 FIFO 队列
+- 它保证 assistant 回复按到达顺序播放，不再使用“只盯最新一条消息”的旧逻辑
+- 它统一提供：
+  - 当前 active reply message
+  - 当前 playback phase
+  - reveal duration
+  - 每条消息的 render mode
+
+当前 phase：
+
+- `idle`
+- `awaiting_start`
+- `revealing`
+- `awaiting_settle`
+
+当前 render mode：
+
+- `static`
+- `queued`
+- `revealing`
+
+关键约束：
+
+- `queued` assistant message 是故意不渲染出来的，避免空壳气泡或全文闪现
+- 不要重新引入“最新 assistant message heuristic”
+- 不要在 shell 里再次维护一套独立 reply phase
+- 两个 shell 都应消费这一份 queue，而不是各自再猜测哪条 assistant 消息该播放
+
+### 4. Shared text rendering 层
+
+核心文件：
+
+- `src/assistant-shells/shared/assistantMessageContent.tsx`
+
+职责：
+
+- 统一 assistant 文本的结构化解析与渲染
+- 统一 reveal 阶段和 reveal 完成阶段的 DOM 语义结构
+- 统一 reveal 时长预算计算
+
+当前原则：
+
+- reveal 阶段和最终静态显示阶段必须使用同一套结构化 block model
+- 无序列表从一开始就应是 `<ul><li>`
+- 有序列表从一开始就应是 `<ol><li>`
+- 段落从一开始就应是 `<p>`
+- 不要再回到“动画阶段直接按原始字符串切字符，完成后再换成格式化 DOM”的做法
+
+这样做是为了避免：
+
+- bullet point 在 reveal 中先显示 `-`
+- reveal 完成后再闪一下变成 `·`
+- reveal 与静态阶段因为 DOM 结构不同而产生额外布局跳动
+
+### 5. Avatar reply coordination 层
+
+核心文件：
+
+- `src/assistant-shells/avatar-ui/useAvatarReplyCoordinator.ts`
+
+职责：
+
+- 这是 avatar controller 的唯一编排入口
+- 它把：
+  - `isLoading`
+  - `hasInput`
+  - shared reply queue 的 phase
+  - avatar runtime 当前状态
+  组合成真正的 avatar 动作策略
+- 它负责：
+  - startup warm
+  - explain 启动确认
+  - explain 启动超时兜底
+  - explain 结束后的 settle
+  - 对 hold state 的 runtime 对齐
+
+关键约束：
+
+- 后续如果要改 avatar 行为，优先改这个文件
+- 不要再在 shell 内部、button handler、或别的 effect 里直接 `controller.requestState(...)`
+- 不要再让多个地方同时写 avatar controller
+
+当前单一写入源原则：
+
+- `useAvatarReplyCoordinator.ts` 才是 controller 的唯一 writer
+- `AvatarAssistantShell.tsx` 负责消费协调结果，不负责自己再写一套 avatar 状态机
+- `useAvatarController.ts` 只负责创建 / reset / dispose controller，不负责行为策略
+
+### 6. Avatar runtime / media playback 层
+
+核心文件：
+
+- `src/features/avatar/avatarController.ts`
+- `src/features/avatar/useAvatarController.ts`
+- `src/features/avatar/AvatarMediaPlayer.tsx`
+- `src/features/avatar/gifPlayback.ts`
+
+职责拆分：
+
+- `avatarController.ts`
+  - avatar 状态机与 runtime 更新
+- `useAvatarController.ts`
+  - controller 生命周期
+- `AvatarMediaPlayer.tsx`
+  - canvas / GIF 播放器接入
+- `gifPlayback.ts`
+  - GIF 解码与帧级播放
+
+关键约束：
+
+- 当前 GIF 的播放方式已经恢复为原 avatar demo 风格的播放器，不是普通 `<img>` 定时切换
+- 如果问题属于“回复什么时候开始 reveal”“avatar 什么时候进 explain”“为什么多次请求导致动作乱跳”，优先检查 coordinator / queue，不要先改 GIF 播放器
+- 只有在确认问题真的是媒体解码、帧时序、canvas 渲染层的问题时，才应修改 `AvatarMediaPlayer.tsx` 或 `gifPlayback.ts`
+
+### 7. 两种 shell 的关系
+
+核心文件：
+
+- `src/assistant-shells/chatgpt-ui/ChatgptAssistantShell.tsx`
+- `src/assistant-shells/avatar-ui/AvatarAssistantShell.tsx`
+
+当前原则：
+
+- 两个 shell 共用同一套 assistant reply playback queue
+- 两个 shell 共用同一套 assistant 文本 reveal / formatted rendering 组件
+- 不同点只在于：
+  - Avatar shell 额外接入 avatar coordinator 和 avatar player
+  - ChatGPT shell 不需要 explain handshake，队列头在合适时机可直接开始 reveal
+
+这意味着：
+
+- 对话 reveal 时序问题，优先修 shared queue / shared text rendering
+- avatar explain / idle / listening / thinking 时序问题，优先修 avatar coordinator
+- 不要为了解某个 shell 的局部症状，复制一套新的 reveal 逻辑
+
+### 8. 当前 conversation key 的作用
+
+当前两个 shell 都使用稳定 conversation key 重置 shared playback queue。
+
+目的：
+
+- round 或 conversation 切换时，旧会话的 seen assistant message 集合要清空
+- 新会话的欢迎语或已存在 transcript 不应误进 reveal 队列
+
+如果以后要改 conversation key：
+
+- 要保证它在“同一轮同一段 transcript”内稳定
+- 只在真正进入新会话时变化
+- 否则会导致 reveal queue 被意外重置
+
+### 9. 未来修改时不要做的事
+
+下面这些做法，之前已经证明会让结构再次混乱：
+
+- 不要把 UI reveal 状态写回 `ConversationMessage`
+- 不要在 `AvatarAssistantShell.tsx` 里直接再写 `controller.requestState(...)`
+- 不要在 `useAvatarController.ts` 里重新加入自动 `boot()` 或别的策略行为
+- 不要把 assistant 回复 reveal 再改回“按最新一条消息猜测”
+- 不要让 reveal 阶段和静态阶段使用不同的 DOM 结构
+- 不要为了修对话时序问题，优先去改 GIF 播放器
+
+### 10. 推荐的排错顺序
+
+以后如果再出现问题，建议按这个顺序查：
+
+1. assistant message 是否已经进入 `chatMessages`
+2. shared queue 是否正确入队、出队、推进 phase
+3. shell 是否正确按 `renderMode` 渲染
+4. avatar coordinator 是否正确请求并确认 explain / settle
+5. 最后才看 GIF 播放器本身
+
+这样可以避免把 transcript 问题误判成播放器问题，也能避免把媒体问题误判成 queue 问题。
 
 ---
 
@@ -416,6 +659,11 @@ Round 2 / EMA 4: https://gatech.co1.qualtrics.com/jfe/form/SV_87x4PTPFdihypb8
 - 保持 `src/App.tsx` 对 `AvatarAssistantShell` 的调用接口不变
 - 在 `src/assistant-shells/avatar-ui/` 内调整实现
 - 更底层的 avatar 动画资源和状态机在 `src/features/avatar/`
+- 如果只是改对话 reveal / explain 时序，请优先看：
+  - `src/assistant-shells/shared/useAssistantReplyPlayback.ts`
+  - `src/assistant-shells/shared/assistantMessageContent.tsx`
+  - `src/assistant-shells/avatar-ui/useAvatarReplyCoordinator.ts`
+- 不要直接绕过 coordinator 去写 `controller.requestState(...)`
 
 这样可以避免和主实验流程写死耦合。
 
@@ -470,8 +718,9 @@ Round 2 / EMA 4: https://gatech.co1.qualtrics.com/jfe/form/SV_87x4PTPFdihypb8
 
 ## 备注
 
-这是一个本地运行版应用：
+这是一个以本地实验流程为核心、配合 Vercel 最小后端的应用：
 
-- 默认不带后端
-- 不自动上传实验数据到服务器
-- 主要职责是驱动流程、保存本地状态、外跳 survey、控制倒计时与截止、并对关键内容做核验
+- 前端主界面、实验流程和草稿状态主要在浏览器本地运行与保存
+- assistant chat 与 AI validation 通过 `/api/*` 调用 Vercel functions
+- 默认不自动把整套实验过程上传到自建数据库
+- 主要职责仍然是驱动流程、保存本地状态、外跳 survey、控制倒计时与截止、并对关键内容做核验
