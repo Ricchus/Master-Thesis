@@ -576,13 +576,39 @@ code {
   background: #fcfdff;
 }
 
+.materialReaderHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.materialReaderHeading {
+  min-width: 0;
+}
+
 .materialReader h3 {
   margin: 0 0 8px;
 }
 
+.materialReaderCopy {
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--text);
+  padding: 8px 12px;
+  white-space: nowrap;
+}
+
+.materialReaderCopy:hover {
+  background: var(--accent-soft);
+  border-color: rgba(15, 111, 255, 0.3);
+}
+
 .readerMeta {
   color: var(--muted);
-  margin-bottom: 12px;
   font-size: 13px;
 }
 
@@ -1103,6 +1129,7 @@ code {
   .headerControls,
   .zoneHeader,
   .deliverableHeader,
+  .materialReaderHeader,
   .assistantComposer,
   .overlayActions {
     flex-direction: column;

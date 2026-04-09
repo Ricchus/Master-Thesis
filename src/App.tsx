@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AvatarAssistantShell } from './assistant-shells/avatar-ui/AvatarAssistantShell'
 import { ChatgptAssistantShell } from './assistant-shells/chatgpt-ui/ChatgptAssistantShell'
 import { GuideOverlay } from './components/GuideOverlay'
 import { IntroScreen } from './components/IntroScreen'
 import { requestAssistantReply } from './lib/assistant'
 import { uid } from './lib/id'
-import { buildUrgentCardText, getRequiredEmails, getTaskSet } from './lib/materials'
+import { buildEmailClipboardText, buildUrgentCardText, getRequiredEmails, getTaskSet } from './lib/materials'
 import { createNewSession } from './lib/randomization'
 import { loadSession, resetSessionStorage, saveSession } from './lib/storage'
 import type {
@@ -253,9 +253,11 @@ function App() {
   const [session, setSession] = useState<SessionState>(() => loadSession())
   const [now, setNow] = useState(Date.now())
   const [copyState, setCopyState] = useState<'idle' | 'copied'>('idle')
+  const [copiedEmailId, setCopiedEmailId] = useState<number | null>(null)
   const [validationBusy, setValidationBusy] = useState(false)
   const [assistantBusy, setAssistantBusy] = useState(false)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
+  const emailCopyResetRef = useRef<number | null>(null)
 
   const liveRound = session.rounds[session.currentRoundIndex]
   const displayRound = session.appFlow === 'guide' ? getGuidePreviewRound(liveRound) : liveRound
@@ -272,6 +274,14 @@ function App() {
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (emailCopyResetRef.current !== null) {
+        window.clearTimeout(emailCopyResetRef.current)
+      }
+    }
   }, [])
 
   useEffect(() => {
@@ -335,6 +345,20 @@ function App() {
     await navigator.clipboard.writeText(session.participantId)
     setCopyState('copied')
     window.setTimeout(() => setCopyState('idle'), 1200)
+  }
+
+  async function copyInboxEmail(email = selectedEmail) {
+    await navigator.clipboard.writeText(buildEmailClipboardText(email))
+    setCopiedEmailId(email.id)
+
+    if (emailCopyResetRef.current !== null) {
+      window.clearTimeout(emailCopyResetRef.current)
+    }
+
+    emailCopyResetRef.current = window.setTimeout(() => {
+      setCopiedEmailId((current) => (current === email.id ? null : current))
+      emailCopyResetRef.current = null
+    }, 1200)
   }
 
   function updateSession(updater: (draft: SessionState) => void) {
@@ -578,8 +602,15 @@ function App() {
         </aside>
 
         <article className="materialReader" data-guide="materials-reader">
-          <h3>{selectedEmail.subject}</h3>
-          <div className="readerMeta">From: {selectedEmail.from} · {selectedEmail.timestamp}</div>
+          <div className="materialReaderHeader">
+            <div className="materialReaderHeading">
+              <h3>{selectedEmail.subject}</h3>
+              <div className="readerMeta">From: {selectedEmail.from} · {selectedEmail.timestamp}</div>
+            </div>
+            <button type="button" className="materialReaderCopy" onClick={() => copyInboxEmail(selectedEmail)}>
+              {copiedEmailId === selectedEmail.id ? 'Copied' : 'Copy email'}
+            </button>
+          </div>
           <pre>{selectedEmail.body}</pre>
         </article>
       </div>
