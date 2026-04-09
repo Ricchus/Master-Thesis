@@ -751,6 +751,10 @@ code {
   line-height: 1.55;
 }
 
+.assistantMsgBubble.revealing {
+  white-space: normal;
+}
+
 .assistantMsgBubble.assistant {
   background: white;
   border: 1px solid var(--line);
@@ -764,6 +768,26 @@ code {
 .assistantMsgBubble.system {
   background: rgba(180, 35, 24, 0.08);
   border: 1px solid rgba(180, 35, 24, 0.16);
+}
+
+.assistantMsgStructuredText {
+  display: grid;
+  gap: 0.6em;
+}
+
+.assistantMsgStructuredText p,
+.assistantMsgStructuredText ul,
+.assistantMsgStructuredText ol {
+  margin: 0;
+}
+
+.assistantMsgStructuredText ul,
+.assistantMsgStructuredText ol {
+  padding-left: 1.35em;
+}
+
+.assistantMsgStructuredText li + li {
+  margin-top: 0.3em;
 }
 
 .assistantComposer {

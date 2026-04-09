@@ -1,4 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
+import {
+  AnimatedAssistantText,
+  FormattedAssistantText
+} from '../shared/assistantMessageContent';
+import { getExplainRevealBudgetMs, useAssistantReplyPlayback } from '../shared/useAssistantReplyPlayback';
 import type { ConversationMessage } from '../../lib/types';
 
 type Props = {
@@ -11,10 +16,25 @@ type Props = {
 export function ChatgptAssistantShell({ messages, isLoading, onSend, disabled }: Props) {
   const [input, setInput] = useState('');
   const listRef = useRef<HTMLDivElement | null>(null);
+  const replyPlayback = useAssistantReplyPlayback({
+    messages,
+    isLoading,
+    canStartReveal: !isLoading,
+    maxRevealDurationMs: getExplainRevealBudgetMs()
+  });
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
-  }, [messages, isLoading]);
+  }, [messages, isLoading, replyPlayback.phase]);
+
+  function scrollToBottom() {
+    listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
+  }
+
+  function handleAssistantRevealComplete(messageId: string) {
+    replyPlayback.markRevealComplete(messageId);
+    replyPlayback.completeSession(messageId);
+  }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -30,7 +50,19 @@ export function ChatgptAssistantShell({ messages, isLoading, onSend, disabled }:
       <div className="assistantMessageList" ref={listRef}>
         {messages.map((message) => (
           <div key={message.id} className={`assistantMsgRow ${message.role}`}>
-            <div className={`assistantMsgBubble ${message.role}`}>{message.text}</div>
+            <div className={`assistantMsgBubble ${message.role} ${replyPlayback.isAnimatingMessage(message.id) ? 'revealing' : ''}`}>
+              {replyPlayback.isAnimatingMessage(message.id) ? (
+                <AnimatedAssistantText
+                  text={message.text}
+                  animate
+                  durationMs={replyPlayback.revealDurationMs}
+                  onRevealStep={scrollToBottom}
+                  onRevealComplete={() => handleAssistantRevealComplete(message.id)}
+                />
+              ) : (
+                <FormattedAssistantText className="assistantMsgStructuredText" text={message.text} />
+              )}
+            </div>
           </div>
         ))}
         {isLoading && (

@@ -1,7 +1,12 @@
-import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AvatarMediaPlayer } from '../../features/avatar/AvatarMediaPlayer';
 import { usePreloadedAvatarAssets, useStableAvatarRenderModel } from '../../features/avatar/avatarMedia';
 import { useAvatarController } from '../../features/avatar/useAvatarController';
+import {
+  AnimatedAssistantText as SharedAnimatedAssistantText,
+  FormattedAssistantText as SharedFormattedAssistantText
+} from '../shared/assistantMessageContent';
+import { getExplainRevealBudgetMs, useAssistantReplyPlayback } from '../shared/useAssistantReplyPlayback';
 import type { ConversationMessage } from '../../lib/types';
 import './avatar-demo-shell.css';
 
@@ -20,11 +25,6 @@ type DisplayMessage = {
   text: string;
   createdAt: number;
 };
-
-type MessageBlock =
-  | { type: 'paragraph'; lines: string[] }
-  | { type: 'unordered-list'; items: string[] }
-  | { type: 'ordered-list'; items: string[]; start: number };
 
 type BubbleSize = {
   height: number;
@@ -49,7 +49,6 @@ type BubbleTailMetrics = {
   viewWidth: number;
 };
 
-const ASSISTANT_REVEAL_CHARACTERS_PER_SECOND = 48;
 const BUBBLE_TAIL_LAYOUT_SPACE = 18;
 const BUBBLE_TAIL_SEAM_OVERLAP = 1;
 const BUBBLE_TAIL_ROOT_MAX_DISTANCE_FROM_BOTTOM = 28;
@@ -65,21 +64,6 @@ function formatClock(ts: number) {
     second: '2-digit',
     hour12: false
   });
-}
-
-function splitTextForReveal(text: string) {
-  const Segmenter = (Intl as typeof Intl & {
-    Segmenter?: new (
-      locales?: string | string[],
-      options?: { granularity: 'grapheme' }
-    ) => { segment(input: string): Iterable<{ segment: string }> };
-  }).Segmenter;
-
-  if (Segmenter) {
-    return Array.from(new Segmenter(undefined, { granularity: 'grapheme' }).segment(text), (part) => part.segment);
-  }
-
-  return Array.from(text);
 }
 
 function clampNumber(value: number, min: number, max: number) {
@@ -126,144 +110,6 @@ function createBubbleTailMetrics(bubbleWidth: number, bubbleHeight: number): Bub
   };
 }
 
-function matchUnorderedListItem(line: string) {
-  return line.match(/^\s*[-*•]\s+(.+)$/)?.[1]?.trim() ?? null;
-}
-
-function matchOrderedListItem(line: string) {
-  const match = line.match(/^\s*(\d+)\.\s+(.+)$/);
-  if (!match) {
-    return null;
-  }
-
-  return {
-    text: match[2].trim(),
-    value: Number(match[1])
-  };
-}
-
-function parseMessageText(text: string): MessageBlock[] {
-  const normalized = text.replace(/\r\n/g, '\n').trim();
-  if (!normalized) {
-    return [];
-  }
-
-  const sourceLines = normalized.split('\n');
-  const blocks: MessageBlock[] = [];
-  let index = 0;
-
-  while (index < sourceLines.length) {
-    const currentLine = sourceLines[index].trim();
-
-    if (!currentLine) {
-      index += 1;
-      continue;
-    }
-
-    const orderedMatch = matchOrderedListItem(currentLine);
-    if (orderedMatch) {
-      const items = [orderedMatch.text];
-      const start = orderedMatch.value;
-      index += 1;
-
-      while (index < sourceLines.length) {
-        const nextLine = sourceLines[index].trim();
-        if (!nextLine) {
-          let nextIndex = index + 1;
-          while (nextIndex < sourceLines.length && !sourceLines[nextIndex].trim()) {
-            nextIndex += 1;
-          }
-
-          if (nextIndex >= sourceLines.length) {
-            index = nextIndex;
-            break;
-          }
-
-          const nextOrderedMatch = matchOrderedListItem(sourceLines[nextIndex].trim());
-          if (!nextOrderedMatch) {
-            index = nextIndex;
-            break;
-          }
-
-          items.push(nextOrderedMatch.text);
-          index = nextIndex + 1;
-          continue;
-        }
-
-        const nextOrderedMatch = matchOrderedListItem(nextLine);
-        if (!nextOrderedMatch) {
-          break;
-        }
-
-        items.push(nextOrderedMatch.text);
-        index += 1;
-      }
-
-      blocks.push({ type: 'ordered-list', items, start });
-      continue;
-    }
-
-    const unorderedMatch = matchUnorderedListItem(currentLine);
-    if (unorderedMatch) {
-      const items = [unorderedMatch];
-      index += 1;
-
-      while (index < sourceLines.length) {
-        const nextLine = sourceLines[index].trim();
-        if (!nextLine) {
-          let nextIndex = index + 1;
-          while (nextIndex < sourceLines.length && !sourceLines[nextIndex].trim()) {
-            nextIndex += 1;
-          }
-
-          if (nextIndex >= sourceLines.length) {
-            index = nextIndex;
-            break;
-          }
-
-          const nextUnorderedMatch = matchUnorderedListItem(sourceLines[nextIndex].trim());
-          if (!nextUnorderedMatch) {
-            index = nextIndex;
-            break;
-          }
-
-          items.push(nextUnorderedMatch);
-          index = nextIndex + 1;
-          continue;
-        }
-
-        const nextUnorderedMatch = matchUnorderedListItem(nextLine);
-        if (!nextUnorderedMatch) {
-          break;
-        }
-
-        items.push(nextUnorderedMatch);
-        index += 1;
-      }
-
-      blocks.push({ type: 'unordered-list', items });
-      continue;
-    }
-
-    const lines = [currentLine];
-    index += 1;
-
-    while (index < sourceLines.length) {
-      const nextLine = sourceLines[index].trim();
-      if (!nextLine || matchOrderedListItem(nextLine) || matchUnorderedListItem(nextLine)) {
-        break;
-      }
-
-      lines.push(nextLine);
-      index += 1;
-    }
-
-    blocks.push({ type: 'paragraph', lines });
-  }
-
-  return blocks;
-}
-
 function useScaledStage(stageWidth: number, stageHeight: number) {
   const outerRef = useRef<HTMLDivElement | null>(null);
   const [scale, setScale] = useState(1);
@@ -297,142 +143,6 @@ function useScaledStage(stageWidth: number, stageHeight: number) {
 
   return { outerRef, scale };
 }
-
-const AnimatedAssistantText = memo(function AnimatedAssistantText({
-  text,
-  animate,
-  onRevealStep,
-  onRevealComplete
-}: {
-  text: string;
-  animate: boolean;
-  onRevealStep?: () => void;
-  onRevealComplete?: () => void;
-}) {
-  const segments = useMemo(() => splitTextForReveal(text), [text]);
-  const [visibleCount, setVisibleCount] = useState(animate ? 0 : segments.length);
-  const frameRef = useRef<number | null>(null);
-  const startedAtRef = useRef<number | null>(null);
-  const visibleCountRef = useRef(visibleCount);
-  const revealCompletedRef = useRef(false);
-
-  useEffect(() => {
-    visibleCountRef.current = visibleCount;
-  }, [visibleCount]);
-
-  useEffect(() => {
-    revealCompletedRef.current = false;
-  }, [animate, segments]);
-
-  useLayoutEffect(() => {
-    if (animate && visibleCount > 0) {
-      onRevealStep?.();
-    }
-  }, [animate, onRevealStep, visibleCount]);
-
-  useEffect(() => {
-    if (!animate || revealCompletedRef.current || visibleCount < segments.length) {
-      return;
-    }
-
-    revealCompletedRef.current = true;
-    onRevealComplete?.();
-  }, [animate, onRevealComplete, segments.length, visibleCount]);
-
-  useEffect(() => {
-    if (!animate) {
-      visibleCountRef.current = segments.length;
-      setVisibleCount(segments.length);
-      return;
-    }
-
-    if (segments.length === 0) {
-      visibleCountRef.current = 0;
-      setVisibleCount(0);
-      return;
-    }
-
-    visibleCountRef.current = 0;
-    setVisibleCount(0);
-    startedAtRef.current = null;
-    const msPerSegment = 1000 / ASSISTANT_REVEAL_CHARACTERS_PER_SECOND;
-
-    const revealNextFrame = (now: number) => {
-      if (startedAtRef.current === null) {
-        startedAtRef.current = now;
-      }
-
-      const elapsed = now - startedAtRef.current;
-      const nextCount = Math.min(segments.length, Math.floor(elapsed / msPerSegment) + 1);
-
-      if (nextCount !== visibleCountRef.current) {
-        visibleCountRef.current = nextCount;
-        setVisibleCount(nextCount);
-      }
-
-      if (nextCount < segments.length) {
-        frameRef.current = window.requestAnimationFrame(revealNextFrame);
-      }
-    };
-
-    frameRef.current = window.requestAnimationFrame(revealNextFrame);
-
-    return () => {
-      if (frameRef.current !== null) {
-        window.cancelAnimationFrame(frameRef.current);
-        frameRef.current = null;
-      }
-      startedAtRef.current = null;
-    };
-  }, [animate, segments]);
-
-  return <>{segments.slice(0, visibleCount).join('')}</>;
-});
-
-const FormattedMessageText = memo(function FormattedMessageText({ text }: { text: string }) {
-  const blocks = useMemo(() => parseMessageText(text), [text]);
-
-  if (blocks.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="messageTextStructured">
-      {blocks.map((block, blockIndex) => {
-        if (block.type === 'unordered-list') {
-          return (
-            <ul key={blockIndex}>
-              {block.items.map((item, itemIndex) => (
-                <li key={itemIndex}>{item}</li>
-              ))}
-            </ul>
-          );
-        }
-
-        if (block.type === 'ordered-list') {
-          return (
-            <ol key={blockIndex} start={block.start}>
-              {block.items.map((item, itemIndex) => (
-                <li key={itemIndex}>{item}</li>
-              ))}
-            </ol>
-          );
-        }
-
-        return (
-          <p key={blockIndex}>
-            {block.lines.map((line, lineIndex) => (
-              <Fragment key={`${blockIndex}-${lineIndex}`}>
-                {line}
-                {lineIndex < block.lines.length - 1 ? <br /> : null}
-              </Fragment>
-            ))}
-          </p>
-        );
-      })}
-    </div>
-  );
-});
 
 const BubbleTail = memo(function BubbleTail({ bubbleHeight, bubbleWidth, side }: {
   bubbleHeight: number;
@@ -511,6 +221,7 @@ const MessageBubble = memo(function MessageBubble({
   isLatestAssistantBubble,
   isLatestUserBubble,
   message,
+  revealDurationMs,
   shouldAnimateAssistant,
   onRevealComplete,
   onRevealStep
@@ -518,6 +229,7 @@ const MessageBubble = memo(function MessageBubble({
   isLatestAssistantBubble: boolean;
   isLatestUserBubble: boolean;
   message: DisplayMessage;
+  revealDurationMs: number;
   shouldAnimateAssistant: boolean;
   onRevealComplete: (messageId: string) => void;
   onRevealStep: () => void;
@@ -573,14 +285,15 @@ const MessageBubble = memo(function MessageBubble({
         <div className={`bubbleSurface ${message.role} ${tailSide ? 'tailed' : 'plain'}`} ref={bubbleSurfaceRef}>
           <div className={`bubbleBody ${shouldAnimateAssistant ? 'revealing' : ''}`}>
             {shouldAnimateAssistant ? (
-              <AnimatedAssistantText
+              <SharedAnimatedAssistantText
                 text={message.text}
                 animate
+                durationMs={revealDurationMs}
                 onRevealStep={onRevealStep}
                 onRevealComplete={() => onRevealComplete(message.id)}
               />
             ) : (
-              <FormattedMessageText text={message.text} />
+              <SharedFormattedAssistantText text={message.text} />
             )}
           </div>
           <div className="bubbleMeta">{formatClock(message.createdAt)}</div>
@@ -591,13 +304,15 @@ const MessageBubble = memo(function MessageBubble({
 });
 
 const MessageList = memo(function MessageList({
+  animatingAssistantId,
   messages,
   onAssistantRevealComplete,
-  revealedAssistantId
+  revealDurationMs
 }: {
+  animatingAssistantId: string | null;
   messages: DisplayMessage[];
   onAssistantRevealComplete: (messageId: string) => void;
-  revealedAssistantId: string | null;
+  revealDurationMs: number;
 }) {
   const listRef = useRef<HTMLDivElement | null>(null);
   const bottomAnchorRef = useRef<HTMLDivElement | null>(null);
@@ -628,13 +343,14 @@ const MessageList = memo(function MessageList({
     <div className="msgList" ref={listRef}>
       <div>
         {messages.map((message) => {
-          const shouldAnimateAssistant = message.role === 'assistant' && message.id === lastMessageId && message.id !== revealedAssistantId;
+          const shouldAnimateAssistant = message.role === 'assistant' && message.id === animatingAssistantId;
           return (
             <MessageBubble
               key={message.id}
               isLatestAssistantBubble={message.id === latestAssistantId}
               isLatestUserBubble={message.id === latestUserId}
               message={message}
+              revealDurationMs={revealDurationMs}
               shouldAnimateAssistant={shouldAnimateAssistant}
               onRevealStep={scrollToBottom}
               onRevealComplete={handleRevealComplete}
@@ -653,15 +369,30 @@ function mapMessageRole(role: ConversationMessage['role']): MessageRole {
 
 export function AvatarAssistantShell({ messages, isLoading, onSend, disabled }: Props) {
   const [input, setInput] = useState('');
-  const [revealedAssistantId, setRevealedAssistantId] = useState<string | null>(null);
   const { controller, runtime, manifest } = useAvatarController();
   const { outerRef, scale } = useScaledStage(STAGE_WIDTH, STAGE_HEIGHT);
   const displayMessages = useMemo<DisplayMessage[]>(() => messages.map((message) => ({ ...message, role: mapMessageRole(message.role) })), [messages]);
-  const latestAssistantId = useMemo(
-    () => [...displayMessages].reverse().find((message) => message.role === 'assistant')?.id ?? null,
-    [displayMessages]
-  );
   const visibleRenderModel = useStableAvatarRenderModel(runtime.renderModel);
+  const defaultExplainBudgetMs = useMemo(() => getExplainRevealBudgetMs(manifest), [manifest]);
+  const explainRevealBudgetMs =
+    runtime.currentState === 'speaking_explain' &&
+    runtime.playbackKind === 'loop' &&
+    !runtime.isTransitioning &&
+    runtime.currentLoopAsset
+      ? runtime.currentLoopAsset.durationMs
+      : defaultExplainBudgetMs;
+  const canStartReveal =
+    !isLoading &&
+    runtime.currentState === 'speaking_explain' &&
+    runtime.playbackKind === 'loop' &&
+    !runtime.isTransitioning;
+  const replyPlayback = useAssistantReplyPlayback({
+    messages,
+    isLoading,
+    canStartReveal,
+    maxRevealDurationMs: explainRevealBudgetMs
+  });
+  const { activeMessageId, completeSession, markRevealComplete, phase, revealDurationMs } = replyPlayback;
 
   usePreloadedAvatarAssets(manifest);
 
@@ -671,8 +402,27 @@ export function AvatarAssistantShell({ messages, isLoading, onSend, disabled }: 
       return;
     }
 
-    if (latestAssistantId && latestAssistantId !== revealedAssistantId) {
-      controller.requestState('speaking_explain', { shouldHold: false, isActiveTrigger: true });
+    if (activeMessageId && (phase === 'queued' || phase === 'revealing')) {
+      const alreadySpeakingLoop =
+        runtime.currentState === 'speaking_explain' &&
+        runtime.playbackKind === 'loop' &&
+        !runtime.isTransitioning;
+
+      if (!alreadySpeakingLoop) {
+        controller.requestState('speaking_explain', { shouldHold: false, isActiveTrigger: true });
+      }
+      return;
+    }
+
+    if (activeMessageId && phase === 'revealed') {
+      const settledOutOfExplain =
+        runtime.currentState !== 'speaking_explain' &&
+        runtime.playbackKind === 'loop' &&
+        !runtime.isTransitioning;
+
+      if (settledOutOfExplain) {
+        completeSession(activeMessageId);
+      }
       return;
     }
 
@@ -682,15 +432,17 @@ export function AvatarAssistantShell({ messages, isLoading, onSend, disabled }: 
     }
 
     controller.requestState('idle_neutral', { shouldHold: true, isActiveTrigger: true });
-  }, [controller, input, isLoading, latestAssistantId]);
-
-  function handleAssistantRevealComplete(messageId: string) {
-    setRevealedAssistantId((current) => (current === messageId ? current : messageId));
-
-    if (messageId === latestAssistantId) {
-      controller.requestState('positive_happy', { shouldHold: false, isActiveTrigger: true });
-    }
-  }
+  }, [
+    activeMessageId,
+    controller,
+    completeSession,
+    phase,
+    input,
+    isLoading,
+    runtime.currentState,
+    runtime.isTransitioning,
+    runtime.playbackKind
+  ]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -715,9 +467,10 @@ export function AvatarAssistantShell({ messages, isLoading, onSend, disabled }: 
         >
           <section className="chatShell avatarTaskShell">
             <MessageList
+              animatingAssistantId={phase === 'revealing' ? activeMessageId : null}
               messages={displayMessages}
-              onAssistantRevealComplete={handleAssistantRevealComplete}
-              revealedAssistantId={revealedAssistantId}
+              onAssistantRevealComplete={markRevealComplete}
+              revealDurationMs={revealDurationMs}
             />
 
             <div className="footerBar">
