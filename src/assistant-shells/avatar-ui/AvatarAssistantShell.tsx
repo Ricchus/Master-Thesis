@@ -472,11 +472,12 @@ export function AvatarAssistantShell({ messages, isLoading, onSend, disabled }: 
               </div>
 
               <form className="composer" onSubmit={handleSubmit}>
-                <input
+                <textarea
                   className="input"
                   value={input}
                   onChange={(event) => setInput(event.target.value)}
                   placeholder={disabled ? 'Messaging is unavailable right now' : 'Message Momo...'}
+                  rows={3}
                   disabled={disabled}
                 />
                 <button className="btn" type="submit" disabled={isLoading || !input.trim() || disabled}>
