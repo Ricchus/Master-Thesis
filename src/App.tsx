@@ -135,6 +135,83 @@ function timelineStatus(round: RoundState, id: PhaseId) {
   return targetIndex < currentIndex ? 'done' : 'todo'
 }
 
+function getResearcherUrgentCountdown(round: RoundState, now: number) {
+  if (round.urgentStartedAt || round.phase === 'urgent' || round.phase === 'ema3') {
+    return {
+      label: 'Urgent task',
+      tone: 'done' as const,
+      value: 'Shown'
+    }
+  }
+
+  if (round.phase === 'analysis' && round.analysisStartedAt) {
+    const remainingMs = URGENT_TRIGGER_MS - (now - round.analysisStartedAt)
+    if (remainingMs > 0) {
+      return {
+        label: 'Urgent task in',
+        tone: 'active' as const,
+        value: formatRemaining(remainingMs)
+      }
+    }
+
+    return {
+      label: 'Urgent task',
+      tone: 'active' as const,
+      value: 'Triggering…'
+    }
+  }
+
+  return {
+    label: 'Urgent trigger',
+    tone: 'inactive' as const,
+    value: 'Not armed'
+  }
+}
+
+function applyResearcherPhaseTiming(round: RoundState, target: PhaseId) {
+  const currentTime = Date.now()
+  round.phase = target
+
+  if (target === 'ema1') {
+    round.startedAt = null
+    round.analysisStartedAt = null
+    round.urgentStartedAt = null
+    round.cutoffReachedAt = null
+    return
+  }
+
+  if (target === 'stage1_replies' || target === 'stage1_task_breakdown' || target === 'ema2') {
+    round.startedAt = currentTime
+    round.analysisStartedAt = null
+    round.urgentStartedAt = null
+    round.cutoffReachedAt = null
+    return
+  }
+
+  if (target === 'analysis') {
+    round.startedAt = currentTime
+    round.analysisStartedAt = currentTime
+    round.urgentStartedAt = null
+    round.cutoffReachedAt = null
+    return
+  }
+
+  if (target === 'urgent' || target === 'ema3') {
+    round.startedAt = currentTime
+    round.analysisStartedAt = currentTime - URGENT_TRIGGER_MS
+    round.urgentStartedAt = currentTime
+    round.cutoffReachedAt = null
+    round.activeMaterialView = 'files'
+    round.selectedFileId = 'urgent-card'
+    return
+  }
+
+  if (target === 'cutoff' || target === 'ema4') {
+    round.startedAt = currentTime - ROUND_DURATION_MS
+    round.cutoffReachedAt = currentTime
+  }
+}
+
 function isMacPlatform() {
   if (typeof navigator === 'undefined') return false
   return /(Mac|iPhone|iPad|iPod)/i.test(navigator.platform || navigator.userAgent)
@@ -190,6 +267,7 @@ function App() {
     ? ROUND_DURATION_MS - (now - liveRound.startedAt)
     : ROUND_DURATION_MS
   const researcherEnabled = session.researcherMode && session.appFlow === 'study'
+  const researcherUrgentCountdown = researcherEnabled ? getResearcherUrgentCountdown(displayRound, now) : null
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000)
@@ -395,25 +473,7 @@ function App() {
     if (!researcherEnabled) return
 
     setSession((prev) => withCurrentRound(prev, (round) => {
-      round.phase = target
-      if (target === 'stage1_replies' || target === 'stage1_task_breakdown') {
-        round.startedAt ??= Date.now()
-      }
-      if (target === 'analysis') {
-        round.startedAt ??= Date.now()
-        round.analysisStartedAt = Date.now()
-      }
-      if (target === 'urgent') {
-        round.startedAt ??= Date.now()
-        round.analysisStartedAt = Date.now() - URGENT_TRIGGER_MS
-        round.urgentStartedAt = Date.now()
-        round.activeMaterialView = 'files'
-        round.selectedFileId = 'urgent-card'
-      }
-      if (target === 'cutoff' || target === 'ema4') {
-        round.startedAt = Date.now() - ROUND_DURATION_MS
-        round.cutoffReachedAt = Date.now()
-      }
+      applyResearcherPhaseTiming(round, target)
     }))
   }
 
@@ -463,6 +523,13 @@ function App() {
               <span className="label">Meeting starts in</span>
               <strong>{formatRemaining(countdownMs)}</strong>
             </div>
+
+            {researcherUrgentCountdown && (
+              <div className={`countdown researcherInfo ${researcherUrgentCountdown.tone}`}>
+                <span className="label">{researcherUrgentCountdown.label}</span>
+                <strong>{researcherUrgentCountdown.value}</strong>
+              </div>
+            )}
           </div>
         </div>
 

@@ -514,6 +514,8 @@ Command + Option + Shift + M
 - researcher mode 默认隐藏
 - 仅通过快捷键切换
 - 在 researcher mode 下，顶部 timeline 节点可点击，能直接跳转阶段
+- 在 researcher mode 下，header 还会显示 researcher-only 的 `Urgent task` 倒计时或状态
+- researcher timeline 跳到 `analysis / urgent / ema3 / cutoff / ema4` 时，会同步重建这几个阶段对应的时间戳语义，保证 urgent trigger 与 cutoff 显示可信
 - 为避免误触，输入框 / textarea / select / contenteditable 内不会触发该快捷键
 
 ### reset

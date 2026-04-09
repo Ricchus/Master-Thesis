@@ -341,6 +341,20 @@ code {
   color: #7c2d12;
 }
 
+.countdown.researcherInfo {
+  min-width: 124px;
+}
+
+.countdown.researcherInfo.active {
+  background: rgba(15, 111, 255, 0.1);
+  color: var(--accent);
+}
+
+.countdown.researcherInfo.done {
+  background: rgba(24, 121, 78, 0.08);
+  color: var(--success);
+}
+
 .headerTimelineRow {
   min-height: 0;
   display: grid;
