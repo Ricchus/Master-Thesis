@@ -1,4 +1,6 @@
 import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { AvatarMediaPlayer } from '../../features/avatar/AvatarMediaPlayer';
+import { usePreloadedAvatarAssets, useStableAvatarRenderModel } from '../../features/avatar/avatarMedia';
 import { useAvatarController } from '../../features/avatar/useAvatarController';
 import type { ConversationMessage } from '../../lib/types';
 import './avatar-demo-shell.css';
@@ -588,10 +590,17 @@ const MessageBubble = memo(function MessageBubble({
   );
 });
 
-const MessageList = memo(function MessageList({ messages }: { messages: DisplayMessage[] }) {
+const MessageList = memo(function MessageList({
+  messages,
+  onAssistantRevealComplete,
+  revealedAssistantId
+}: {
+  messages: DisplayMessage[];
+  onAssistantRevealComplete: (messageId: string) => void;
+  revealedAssistantId: string | null;
+}) {
   const listRef = useRef<HTMLDivElement | null>(null);
   const bottomAnchorRef = useRef<HTMLDivElement | null>(null);
-  const [revealedAssistantId, setRevealedAssistantId] = useState<string | null>(null);
   const lastMessageId = messages[messages.length - 1]?.id;
   const latestAssistantId = useMemo(() => [...messages].reverse().find((message) => message.role === 'assistant')?.id ?? null, [messages]);
   const latestUserId = useMemo(() => [...messages].reverse().find((message) => message.role === 'user')?.id ?? null, [messages]);
@@ -611,7 +620,7 @@ const MessageList = memo(function MessageList({ messages }: { messages: DisplayM
   }, [lastMessageId]);
 
   function handleRevealComplete(messageId: string) {
-    setRevealedAssistantId((current) => (current === messageId ? current : messageId));
+    onAssistantRevealComplete(messageId);
     scrollToBottom();
   }
 
@@ -644,23 +653,44 @@ function mapMessageRole(role: ConversationMessage['role']): MessageRole {
 
 export function AvatarAssistantShell({ messages, isLoading, onSend, disabled }: Props) {
   const [input, setInput] = useState('');
-  const { controller, runtime } = useAvatarController();
+  const [revealedAssistantId, setRevealedAssistantId] = useState<string | null>(null);
+  const { controller, runtime, manifest } = useAvatarController();
   const { outerRef, scale } = useScaledStage(STAGE_WIDTH, STAGE_HEIGHT);
   const displayMessages = useMemo<DisplayMessage[]>(() => messages.map((message) => ({ ...message, role: mapMessageRole(message.role) })), [messages]);
+  const latestAssistantId = useMemo(
+    () => [...displayMessages].reverse().find((message) => message.role === 'assistant')?.id ?? null,
+    [displayMessages]
+  );
+  const visibleRenderModel = useStableAvatarRenderModel(runtime.renderModel);
+
+  usePreloadedAvatarAssets(manifest);
 
   useEffect(() => {
     if (isLoading) {
-      controller.requestState('thinking_process', { shouldHold: true });
+      controller.requestState('thinking_process', { shouldHold: true, isActiveTrigger: true });
+      return;
+    }
+
+    if (latestAssistantId && latestAssistantId !== revealedAssistantId) {
+      controller.requestState('speaking_explain', { shouldHold: false, isActiveTrigger: true });
       return;
     }
 
     if (input.trim()) {
-      controller.requestState('listening_attentive', { shouldHold: true });
+      controller.requestState('listening_attentive', { shouldHold: true, isActiveTrigger: true });
       return;
     }
 
-    controller.requestState('idle_neutral', { shouldHold: true });
-  }, [controller, input, isLoading]);
+    controller.requestState('idle_neutral', { shouldHold: true, isActiveTrigger: true });
+  }, [controller, input, isLoading, latestAssistantId]);
+
+  function handleAssistantRevealComplete(messageId: string) {
+    setRevealedAssistantId((current) => (current === messageId ? current : messageId));
+
+    if (messageId === latestAssistantId) {
+      controller.requestState('positive_happy', { shouldHold: false, isActiveTrigger: true });
+    }
+  }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -668,9 +698,8 @@ export function AvatarAssistantShell({ messages, isLoading, onSend, disabled }: 
     if (!text || isLoading || disabled) return;
 
     setInput('');
-    controller.requestState('thinking_process', { shouldHold: true });
+    controller.requestState('thinking_process', { shouldHold: true, isActiveTrigger: true });
     await onSend(text);
-    controller.requestState('positive_happy', { shouldHold: false });
   }
 
   return (
@@ -685,7 +714,11 @@ export function AvatarAssistantShell({ messages, isLoading, onSend, disabled }: 
           }}
         >
           <section className="chatShell avatarTaskShell">
-            <MessageList messages={displayMessages} />
+            <MessageList
+              messages={displayMessages}
+              onAssistantRevealComplete={handleAssistantRevealComplete}
+              revealedAssistantId={revealedAssistantId}
+            />
 
             <div className="footerBar">
               <div className="avatarDock">
@@ -700,11 +733,11 @@ export function AvatarAssistantShell({ messages, isLoading, onSend, disabled }: 
                 )}
                 <div className="avatarStage">
                   <div className="avatarClip">
-                    {runtime.renderModel ? (
-                      <img src={runtime.renderModel.src} alt="Momo" className="avatarTaskShellImage" />
-                    ) : (
-                      <div className="avatarTaskShellFallback">Momo is getting ready…</div>
-                    )}
+                    <AvatarMediaPlayer
+                      renderModel={visibleRenderModel}
+                      avatarAlt="Momo"
+                      avatarFallback="Momo is getting ready…"
+                    />
                   </div>
                 </div>
               </div>

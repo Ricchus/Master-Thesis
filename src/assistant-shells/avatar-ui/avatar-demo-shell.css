@@ -381,30 +381,69 @@
 }
 
 .avatarTaskShell .avatarClip {
+  position: relative;
+  z-index: 1;
   width: 164px;
   height: 164px;
   border-radius: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 22%, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0.18) 28%, rgba(255, 255, 255, 0) 60%),
+    linear-gradient(180deg, var(--avatar-bg-top) 0%, var(--avatar-bg-bottom) 100%);
 }
 
-.avatarTaskShell .avatarTaskShellImage {
+.avatarTaskShell .avatarClip::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 30% 19% at 15% 0%, rgba(241, 239, 240, 0.3) 0%, rgba(241, 239, 240, 0.16) 24%, rgba(241, 239, 240, 0.06) 44%, rgba(241, 239, 240, 0.015) 56%, rgba(241, 239, 240, 0) 68%),
+    radial-gradient(ellipse 30% 19% at 85% 0%, rgba(241, 239, 240, 0.3) 0%, rgba(241, 239, 240, 0.16) 24%, rgba(241, 239, 240, 0.06) 44%, rgba(241, 239, 240, 0.015) 56%, rgba(241, 239, 240, 0) 68%),
+    linear-gradient(90deg, rgba(236, 235, 236, 0.6) 0%, rgba(236, 235, 236, 0.34) 7%, rgba(236, 235, 236, 0.15) 13%, rgba(236, 235, 236, 0.05) 18%, rgba(236, 235, 236, 0) 23%),
+    linear-gradient(270deg, rgba(236, 235, 236, 0.6) 0%, rgba(236, 235, 236, 0.34) 7%, rgba(236, 235, 236, 0.15) 13%, rgba(236, 235, 236, 0.05) 18%, rgba(236, 235, 236, 0) 23%),
+    linear-gradient(180deg, rgba(241, 239, 240, 0.038) 0%, rgba(241, 239, 240, 0.012) 4%, rgba(241, 239, 240, 0) 8%),
+    linear-gradient(0deg, rgba(236, 235, 236, 0.34) 0%, rgba(236, 235, 236, 0.14) 5%, rgba(236, 235, 236, 0.04) 10%, rgba(236, 235, 236, 0) 15%);
+}
+
+.avatarTaskShell .avatarTaskShellImage,
+.avatarTaskShell .avatarImg,
+.avatarTaskShell .avatarFallback {
   width: 100%;
   height: 100%;
+  background: linear-gradient(180deg, var(--avatar-bg-top) 0%, var(--avatar-bg-bottom) 100%);
+  display: block;
+}
+
+.avatarTaskShell .avatarTaskShellImage,
+.avatarTaskShell .avatarImg {
   object-fit: cover;
   object-position: center center;
   transform: scale(1.08);
   transform-origin: center center;
-  display: block;
+  -webkit-mask-image: radial-gradient(ellipse 65% 94% at 50% 31%, #000 58%, rgba(0, 0, 0, 0.995) 72%, rgba(0, 0, 0, 0.94) 83%, rgba(0, 0, 0, 0.62) 93%, rgba(0, 0, 0, 0.22) 97.5%, transparent 100%);
+  mask-image: radial-gradient(ellipse 65% 94% at 50% 31%, #000 58%, rgba(0, 0, 0, 0.995) 72%, rgba(0, 0, 0, 0.94) 83%, rgba(0, 0, 0, 0.62) 93%, rgba(0, 0, 0, 0.22) 97.5%, transparent 100%);
 }
 
-.avatarTaskShell .avatarTaskShellFallback {
+.avatarTaskShell .avatarImgLayer {
+  position: absolute;
+  inset: 0;
+}
+
+.avatarTaskShell .avatarImgCurrent {
+  z-index: 0;
+}
+
+.avatarTaskShell .avatarTaskShellFallback,
+.avatarTaskShell .avatarFallback {
   color: var(--muted);
   font-size: 12px;
   padding: 10px;
   text-align: center;
+  display: grid;
+  place-items: center;
+  -webkit-mask-image: radial-gradient(ellipse 65% 94% at 50% 31%, #000 58%, rgba(0, 0, 0, 0.995) 72%, rgba(0, 0, 0, 0.94) 83%, rgba(0, 0, 0, 0.62) 93%, rgba(0, 0, 0, 0.22) 97.5%, transparent 100%);
+  mask-image: radial-gradient(ellipse 65% 94% at 50% 31%, #000 58%, rgba(0, 0, 0, 0.995) 72%, rgba(0, 0, 0, 0.94) 83%, rgba(0, 0, 0, 0.62) 93%, rgba(0, 0, 0, 0.22) 97.5%, transparent 100%);
 }
 
 .avatarTaskShell .composer {

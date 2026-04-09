@@ -9,6 +9,7 @@ export type AnchorState =
 
 export type PlaybackKind = "idle" | "loop" | "transition";
 export type PlayDirection = "forward" | "reverse";
+export type LoopMode = "once" | "repeat";
 
 export type ClipAsset = {
   id: string;
@@ -41,12 +42,14 @@ export type RoutePlan =
 
 export type AvatarRenderModel =
   | {
-      mediaKind: "img";
+      mediaKind: "gif" | "video";
       src: string;
       key: string;
       assetId: string;
       playbackKind: PlaybackKind;
       playDirection: PlayDirection;
+      loopMode: LoopMode;
+      playbackRate: number;
     }
   | null;
 
