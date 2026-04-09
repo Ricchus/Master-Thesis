@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import manifest from "../../features/avatar/avatarPreviewManifest";
 import type { AvatarManifest } from "../../features/avatar/types";
 import type { ConversationMessage } from "../../lib/types";
 import { getAssistantRevealDurationMs } from "./assistantMessageContent";
 
-export type AssistantReplyPlaybackPhase = "idle" | "queued" | "revealing" | "revealed";
+export type AssistantReplyPlaybackPhase = "idle" | "queued" | "revealing" | "revealed_waiting";
+export type AssistantMessageRenderMode = "static" | "queued" | "revealing";
 
 function getLatestAssistantMessage(messages: ConversationMessage[]) {
   return [...messages].reverse().find((message) => message.role === "assistant") ?? null;
@@ -36,7 +37,7 @@ export function useAssistantReplyPlayback({
   const [phase, setPhase] = useState<AssistantReplyPlaybackPhase>("idle");
   const [revealDurationMs, setRevealDurationMs] = useState(0);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!latestAssistantMessage) {
       return;
     }
@@ -61,35 +62,48 @@ export function useAssistantReplyPlayback({
     setPhase("revealing");
   }, [activeMessageId, canStartReveal, isLoading, maxRevealDurationMs, messages, phase]);
 
-  function markRevealComplete(messageId: string) {
+  const markRevealComplete = useCallback((messageId: string) => {
     if (!activeMessageId || messageId !== activeMessageId) {
       return;
     }
 
     completedMessageIdsRef.current.add(messageId);
-    setPhase("revealed");
-  }
+    setPhase("revealed_waiting");
+  }, [activeMessageId]);
 
-  function completeSession(messageId: string) {
+  const completeSession = useCallback((messageId: string) => {
     if (!activeMessageId || messageId !== activeMessageId) {
       return;
     }
 
+    completedMessageIdsRef.current.add(messageId);
     setActiveMessageId(null);
     setPhase("idle");
     setRevealDurationMs(0);
-  }
+  }, [activeMessageId]);
 
-  function isAnimatingMessage(messageId: string) {
-    return activeMessageId === messageId && phase === "revealing";
-  }
+  const getMessageRenderMode = useCallback((messageId: string): AssistantMessageRenderMode => {
+    if (activeMessageId !== messageId) {
+      return "static";
+    }
+
+    if (phase === "queued") {
+      return "queued";
+    }
+
+    if (phase === "revealing") {
+      return "revealing";
+    }
+
+    return "static";
+  }, [activeMessageId, phase]);
 
   return {
     activeMessageId,
+    getMessageRenderMode,
     latestAssistantMessage,
     phase,
     revealDurationMs,
-    isAnimatingMessage,
     markRevealComplete,
     completeSession
   };

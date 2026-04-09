@@ -48,23 +48,33 @@ export function ChatgptAssistantShell({ messages, isLoading, onSend, disabled }:
     <div className="assistantShell assistantChatgpt">
       <div className="assistantTopline">ChatGPT-style assistant</div>
       <div className="assistantMessageList" ref={listRef}>
-        {messages.map((message) => (
-          <div key={message.id} className={`assistantMsgRow ${message.role}`}>
-            <div className={`assistantMsgBubble ${message.role} ${replyPlayback.isAnimatingMessage(message.id) ? 'revealing' : ''}`}>
-              {replyPlayback.isAnimatingMessage(message.id) ? (
-                <AnimatedAssistantText
-                  text={message.text}
-                  animate
-                  durationMs={replyPlayback.revealDurationMs}
-                  onRevealStep={scrollToBottom}
-                  onRevealComplete={() => handleAssistantRevealComplete(message.id)}
-                />
-              ) : (
-                <FormattedAssistantText className="assistantMsgStructuredText" text={message.text} />
-              )}
+        {messages.map((message) => {
+          const renderMode = message.role === 'assistant'
+            ? replyPlayback.getMessageRenderMode(message.id)
+            : 'static';
+
+          return (
+            <div key={message.id} className={`assistantMsgRow ${message.role}`}>
+              <div className={`assistantMsgBubble ${message.role} ${renderMode === 'revealing' ? 'revealing' : ''}`}>
+                {renderMode === 'revealing' ? (
+                  <AnimatedAssistantText
+                    text={message.text}
+                    animate
+                    durationMs={replyPlayback.revealDurationMs}
+                    onRevealStep={scrollToBottom}
+                    onRevealComplete={() => handleAssistantRevealComplete(message.id)}
+                  />
+                ) : renderMode === 'queued' ? (
+                  <div aria-hidden="true" style={{ visibility: 'hidden' }}>
+                    <FormattedAssistantText className="assistantMsgStructuredText" text={message.text} />
+                  </div>
+                ) : (
+                  <FormattedAssistantText className="assistantMsgStructuredText" text={message.text} />
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         {isLoading && (
           <div className="assistantMsgRow assistant">
             <div className="assistantMsgBubble assistant">Thinking…</div>

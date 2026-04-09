@@ -6,7 +6,11 @@ import {
   AnimatedAssistantText as SharedAnimatedAssistantText,
   FormattedAssistantText as SharedFormattedAssistantText
 } from '../shared/assistantMessageContent';
-import { getExplainRevealBudgetMs, useAssistantReplyPlayback } from '../shared/useAssistantReplyPlayback';
+import {
+  getExplainRevealBudgetMs,
+  useAssistantReplyPlayback,
+  type AssistantMessageRenderMode
+} from '../shared/useAssistantReplyPlayback';
 import type { ConversationMessage } from '../../lib/types';
 import './avatar-demo-shell.css';
 
@@ -56,6 +60,12 @@ const BUBBLE_TAIL_ROOT_LOWER_MAX_DISTANCE_FROM_BOTTOM = 12;
 // Retained crop of the original demo after removing the top control strip.
 const STAGE_WIDTH = 980;
 const STAGE_HEIGHT = 456;
+
+type AvatarCommand = {
+  key: string;
+  shouldHold: boolean;
+  state: 'idle_neutral' | 'listening_attentive' | 'speaking_explain' | 'thinking_process';
+};
 
 function formatClock(ts: number) {
   return new Date(ts).toLocaleTimeString([], {
@@ -218,24 +228,25 @@ const BubbleOutline = memo(function BubbleOutline({ bubbleHeight, bubbleWidth, s
 });
 
 const MessageBubble = memo(function MessageBubble({
+  assistantRenderMode,
   isLatestAssistantBubble,
   isLatestUserBubble,
   message,
   revealDurationMs,
-  shouldAnimateAssistant,
   onRevealComplete,
   onRevealStep
 }: {
+  assistantRenderMode: AssistantMessageRenderMode;
   isLatestAssistantBubble: boolean;
   isLatestUserBubble: boolean;
   message: DisplayMessage;
   revealDurationMs: number;
-  shouldAnimateAssistant: boolean;
   onRevealComplete: (messageId: string) => void;
   onRevealStep: () => void;
 }) {
   const bubbleSurfaceRef = useRef<HTMLDivElement | null>(null);
   const [bubbleSize, setBubbleSize] = useState<BubbleSize | null>(null);
+  const shouldAnimateAssistant = assistantRenderMode === 'revealing';
   const tailSide = isLatestAssistantBubble && message.role === 'assistant'
     ? 'assistant'
     : isLatestUserBubble && message.role === 'user'
@@ -284,7 +295,7 @@ const MessageBubble = memo(function MessageBubble({
         {tailSide && bubbleSize ? <BubbleOutline bubbleHeight={bubbleSize.height} bubbleWidth={bubbleSize.width} side={tailSide} /> : null}
         <div className={`bubbleSurface ${message.role} ${tailSide ? 'tailed' : 'plain'}`} ref={bubbleSurfaceRef}>
           <div className={`bubbleBody ${shouldAnimateAssistant ? 'revealing' : ''}`}>
-            {shouldAnimateAssistant ? (
+            {assistantRenderMode === 'revealing' ? (
               <SharedAnimatedAssistantText
                 text={message.text}
                 animate
@@ -292,6 +303,10 @@ const MessageBubble = memo(function MessageBubble({
                 onRevealStep={onRevealStep}
                 onRevealComplete={() => onRevealComplete(message.id)}
               />
+            ) : assistantRenderMode === 'queued' ? (
+              <div aria-hidden="true" style={{ visibility: 'hidden' }}>
+                <SharedFormattedAssistantText text={message.text} />
+              </div>
             ) : (
               <SharedFormattedAssistantText text={message.text} />
             )}
@@ -304,12 +319,12 @@ const MessageBubble = memo(function MessageBubble({
 });
 
 const MessageList = memo(function MessageList({
-  animatingAssistantId,
+  assistantRenderModeForMessage,
   messages,
   onAssistantRevealComplete,
   revealDurationMs
 }: {
-  animatingAssistantId: string | null;
+  assistantRenderModeForMessage: (messageId: string) => AssistantMessageRenderMode;
   messages: DisplayMessage[];
   onAssistantRevealComplete: (messageId: string) => void;
   revealDurationMs: number;
@@ -343,15 +358,17 @@ const MessageList = memo(function MessageList({
     <div className="msgList" ref={listRef}>
       <div>
         {messages.map((message) => {
-          const shouldAnimateAssistant = message.role === 'assistant' && message.id === animatingAssistantId;
+          const assistantRenderMode = message.role === 'assistant'
+            ? assistantRenderModeForMessage(message.id)
+            : 'static';
           return (
             <MessageBubble
               key={message.id}
+              assistantRenderMode={assistantRenderMode}
               isLatestAssistantBubble={message.id === latestAssistantId}
               isLatestUserBubble={message.id === latestUserId}
               message={message}
               revealDurationMs={revealDurationMs}
-              shouldAnimateAssistant={shouldAnimateAssistant}
               onRevealStep={scrollToBottom}
               onRevealComplete={handleRevealComplete}
             />
@@ -369,6 +386,7 @@ function mapMessageRole(role: ConversationMessage['role']): MessageRole {
 
 export function AvatarAssistantShell({ messages, isLoading, onSend, disabled }: Props) {
   const [input, setInput] = useState('');
+  const lastIssuedCommandRef = useRef<string | null>(null);
   const { controller, runtime, manifest } = useAvatarController();
   const { outerRef, scale } = useScaledStage(STAGE_WIDTH, STAGE_HEIGHT);
   const displayMessages = useMemo<DisplayMessage[]>(() => messages.map((message) => ({ ...message, role: mapMessageRole(message.role) })), [messages]);
@@ -392,57 +410,54 @@ export function AvatarAssistantShell({ messages, isLoading, onSend, disabled }: 
     canStartReveal,
     maxRevealDurationMs: explainRevealBudgetMs
   });
-  const { activeMessageId, completeSession, markRevealComplete, phase, revealDurationMs } = replyPlayback;
+  const { activeMessageId, completeSession, getMessageRenderMode, markRevealComplete, phase, revealDurationMs } = replyPlayback;
+  const hasInput = input.trim().length > 0;
+  const settledOutOfExplain =
+    runtime.currentState !== 'speaking_explain' &&
+    runtime.playbackKind === 'loop' &&
+    !runtime.isTransitioning;
+  const hasActiveReplySession = Boolean(activeMessageId) && (
+    phase === 'queued' ||
+    phase === 'revealing' ||
+    (phase === 'revealed_waiting' && !settledOutOfExplain)
+  );
+  const desiredAvatarCommand = useMemo<AvatarCommand>(() => {
+    if (isLoading) {
+      return { key: 'thinking', state: 'thinking_process', shouldHold: true };
+    }
+
+    if (hasActiveReplySession && activeMessageId) {
+      return { key: `speaking:${activeMessageId}`, state: 'speaking_explain', shouldHold: false };
+    }
+
+    if (hasInput) {
+      return { key: 'listening', state: 'listening_attentive', shouldHold: true };
+    }
+
+    return { key: 'idle', state: 'idle_neutral', shouldHold: true };
+  }, [activeMessageId, hasActiveReplySession, hasInput, isLoading]);
 
   usePreloadedAvatarAssets(manifest);
 
   useEffect(() => {
-    if (isLoading) {
-      controller.requestState('thinking_process', { shouldHold: true, isActiveTrigger: true });
+    if (lastIssuedCommandRef.current === desiredAvatarCommand.key) {
       return;
     }
 
-    if (activeMessageId && (phase === 'queued' || phase === 'revealing')) {
-      const alreadySpeakingLoop =
-        runtime.currentState === 'speaking_explain' &&
-        runtime.playbackKind === 'loop' &&
-        !runtime.isTransitioning;
+    lastIssuedCommandRef.current = desiredAvatarCommand.key;
+    controller.requestState(desiredAvatarCommand.state, {
+      shouldHold: desiredAvatarCommand.shouldHold,
+      isActiveTrigger: true
+    });
+  }, [controller, desiredAvatarCommand]);
 
-      if (!alreadySpeakingLoop) {
-        controller.requestState('speaking_explain', { shouldHold: false, isActiveTrigger: true });
-      }
+  useEffect(() => {
+    if (!activeMessageId || phase !== 'revealed_waiting' || !settledOutOfExplain) {
       return;
     }
 
-    if (activeMessageId && phase === 'revealed') {
-      const settledOutOfExplain =
-        runtime.currentState !== 'speaking_explain' &&
-        runtime.playbackKind === 'loop' &&
-        !runtime.isTransitioning;
-
-      if (settledOutOfExplain) {
-        completeSession(activeMessageId);
-      }
-      return;
-    }
-
-    if (input.trim()) {
-      controller.requestState('listening_attentive', { shouldHold: true, isActiveTrigger: true });
-      return;
-    }
-
-    controller.requestState('idle_neutral', { shouldHold: true, isActiveTrigger: true });
-  }, [
-    activeMessageId,
-    controller,
-    completeSession,
-    phase,
-    input,
-    isLoading,
-    runtime.currentState,
-    runtime.isTransitioning,
-    runtime.playbackKind
-  ]);
+    completeSession(activeMessageId);
+  }, [activeMessageId, completeSession, phase, settledOutOfExplain]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -467,7 +482,7 @@ export function AvatarAssistantShell({ messages, isLoading, onSend, disabled }: 
         >
           <section className="chatShell avatarTaskShell">
             <MessageList
-              animatingAssistantId={phase === 'revealing' ? activeMessageId : null}
+              assistantRenderModeForMessage={getMessageRenderMode}
               messages={displayMessages}
               onAssistantRevealComplete={markRevealComplete}
               revealDurationMs={revealDurationMs}
