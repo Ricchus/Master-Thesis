@@ -436,7 +436,9 @@ code {
 }
 
 .workArea {
-  overflow: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   padding: 10px;
 }
 
@@ -575,10 +577,16 @@ code {
 }
 
 .deliverableSection {
-  min-height: 100%;
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding-right: 2px;
 }
 
 .replyCards {
@@ -630,6 +638,10 @@ code {
 .card textarea,
 .analysisGrid textarea {
   resize: vertical;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .analysisGrid {
