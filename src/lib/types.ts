@@ -26,19 +26,29 @@ export type StageValidationResult = {
   summary: string;
 };
 
+export type MaterialInline =
+  | { type: 'text'; text: string }
+  | { type: 'strong'; text: string };
+
+export type MaterialBlock =
+  | { type: 'paragraph'; content: MaterialInline[] }
+  | { type: 'bullets'; items: MaterialInline[][] }
+  | { type: 'table'; columns: string[]; rows: string[][] }
+  | { type: 'note'; title?: string; content: MaterialInline[] };
+
 export type Email = {
   id: number;
   timestamp: string;
   from: string;
   subject: string;
-  body: string;
+  body: MaterialBlock[];
   requiredReply?: boolean;
 };
 
 export type TaskFile = {
   id: FileDocId;
   label: string;
-  body: string;
+  body: MaterialBlock[];
 };
 
 export type TaskSet = {

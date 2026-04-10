@@ -65,6 +65,7 @@ Avatar 动画与状态机相关逻辑在：
 ### 材料与核验
 
 - `src/data/materials.ts`
+- `src/components/materials/MaterialContent.tsx`
 - `src/lib/materials.ts`
 - `src/lib/validation.ts`
 
@@ -709,6 +710,14 @@ Round 2 / EMA 4: https://gatech.co1.qualtrics.com/jfe/form/SV_87x4PTPFdihypb8
 改：
 
 - `src/data/materials.ts`
+- `src/components/materials/MaterialContent.tsx`
+- `src/lib/materials.ts`
+
+说明：
+
+- materials 现在使用受控的结构化内容模型，不再依赖大段纯文本 `<pre>`
+- files 可用 bullets / notes / tables 表达，email 可用局部加粗强调关键信息
+- 如果要新增材料，优先继续用结构化 blocks；不要回退到长字符串再靠样式硬撑
 
 ### 4. 调整核验标准
 

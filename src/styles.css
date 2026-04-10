@@ -612,8 +612,80 @@ code {
   font-size: 13px;
 }
 
-.materialReader pre {
+.materialRichContent {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  color: var(--text);
+}
+
+.materialRichContent strong {
+  font-weight: 700;
+}
+
+.materialParagraph {
+  margin: 0;
   line-height: 1.7;
+}
+
+.materialBullets {
+  margin: 0;
+  padding-left: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.materialBullets li {
+  line-height: 1.65;
+}
+
+.materialTableWrap {
+  overflow-x: auto;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 12px;
+}
+
+.materialTable {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 420px;
+  background: #fff;
+}
+
+.materialTable th,
+.materialTable td {
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.materialTable th {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  background: rgba(15, 111, 255, 0.04);
+}
+
+.materialTable tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.materialNote {
+  border: 1px solid rgba(15, 111, 255, 0.16);
+  background: rgba(15, 111, 255, 0.05);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.materialNoteTitle {
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 8px;
 }
 
 .deliverableSection {

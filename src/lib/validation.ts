@@ -1,4 +1,4 @@
-import { getRequiredEmails, getTaskSet } from './materials';
+import { getRequiredEmails, getTaskSet, materialContentToPlainText } from './materials';
 import type { AnalysisBrief, RoundState, StageValidationResult, ToolType } from './types';
 
 function wordCount(text: string) {
@@ -81,7 +81,7 @@ export async function validateReplies(round: RoundState): Promise<StageValidatio
   const submission = required
     .map((email) => {
       const reply = round.replies.find((item) => item.emailId === email.id)!;
-      return `Original email ${email.id} from ${email.from}: ${email.subject}\nOriginal body: ${email.body}\n\nDraft reply:\nTo: ${reply.to}\nSubject: ${reply.subject}\nBody: ${reply.body}`;
+      return `Original email ${email.id} from ${email.from}: ${email.subject}\nOriginal body: ${materialContentToPlainText(email.body)}\n\nDraft reply:\nTo: ${reply.to}\nSubject: ${reply.subject}\nBody: ${reply.body}`;
     })
     .join('\n\n---\n\n');
 

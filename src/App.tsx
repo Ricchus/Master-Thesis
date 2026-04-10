@@ -3,15 +3,17 @@ import { AvatarAssistantShell } from './assistant-shells/avatar-ui/AvatarAssista
 import { ChatgptAssistantShell } from './assistant-shells/chatgpt-ui/ChatgptAssistantShell'
 import { GuideOverlay } from './components/GuideOverlay'
 import { IntroScreen } from './components/IntroScreen'
+import { MaterialContent } from './components/materials/MaterialContent'
 import { requestAssistantReply } from './lib/assistant'
 import { uid } from './lib/id'
-import { buildEmailClipboardText, buildUrgentCardText, getRequiredEmails, getTaskSet } from './lib/materials'
+import { buildEmailClipboardText, buildUrgentCardContent, getRequiredEmails, getTaskSet } from './lib/materials'
 import { createNewSession } from './lib/randomization'
 import { loadSession, resetSessionStorage, saveSession } from './lib/storage'
 import type {
   AnalysisBrief,
   AppFlow,
   FileDocId,
+  MaterialBlock,
   PhaseId,
   RoundState,
   SessionState,
@@ -502,11 +504,14 @@ function App() {
   }
 
   const selectedEmail = taskSet.emails.find((item) => item.id === displayRound.selectedEmailId) ?? taskSet.emails[0]
-  const selectedFileBody = displayRound.selectedFileId === 'urgent-card'
+  const inactiveUrgentCardContent: MaterialBlock[] = [
+    { type: 'note', content: [{ type: 'text', text: 'The urgent task card will appear here if it is triggered during analysis.' }] }
+  ]
+  const selectedFileContent: MaterialBlock[] = displayRound.selectedFileId === 'urgent-card'
     ? (displayRound.phase === 'urgent' || displayRound.urgentStartedAt
-        ? buildUrgentCardText(displayRound.taskSetId, displayRound.emergencyType)
-        : 'The urgent task card will appear here if it is triggered during analysis.')
-    : taskSet.files.find((file) => file.id === displayRound.selectedFileId)?.body ?? ''
+        ? buildUrgentCardContent(displayRound.taskSetId, displayRound.emergencyType)
+        : inactiveUrgentCardContent)
+    : taskSet.files.find((file) => file.id === displayRound.selectedFileId)?.body ?? []
 
   function renderHeader() {
     return (
@@ -611,7 +616,7 @@ function App() {
               {copiedEmailId === selectedEmail.id ? 'Copied' : 'Copy email'}
             </button>
           </div>
-          <pre>{selectedEmail.body}</pre>
+          <MaterialContent content={selectedEmail.body} />
         </article>
       </div>
     )
@@ -638,7 +643,7 @@ function App() {
 
         <article className="materialReader" data-guide="materials-reader">
           <h3>{taskSet.files.find((file) => file.id === displayRound.selectedFileId)?.label ?? 'File'}</h3>
-          <pre>{selectedFileBody}</pre>
+          <MaterialContent content={selectedFileContent} />
         </article>
       </div>
     )
