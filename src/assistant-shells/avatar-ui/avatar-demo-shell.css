@@ -86,7 +86,7 @@
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 18px 24px 12px;
+  padding: 18px 24px 10px;
   overscroll-behavior: contain;
   background:
     radial-gradient(circle at 10% 64%, rgba(241, 239, 240, 1) 0%, rgba(236, 235, 236, 0.94) 22%, rgba(236, 235, 236, 0.52) 38%, rgba(236, 235, 236, 0) 56%),
@@ -276,8 +276,8 @@
   display: grid;
   grid-template-columns: 216px minmax(0, 1fr);
   gap: 18px;
-  align-items: end;
-  padding: 18px 22px 22px;
+  align-items: start;
+  padding: 0 22px 8px;
   background:
     radial-gradient(circle at 12% 32%, rgba(241, 239, 240, 0.98) 0%, rgba(236, 235, 236, 0.92) 26%, rgba(236, 235, 236, 0.26) 58%, rgba(236, 235, 236, 0) 76%),
     linear-gradient(90deg, rgba(241, 239, 240, 0.98) 0%, rgba(236, 235, 236, 0.94) 30%, rgba(233, 228, 221, 0.84) 62%, rgba(242, 236, 227, 0.92) 100%),
@@ -290,7 +290,7 @@
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  min-height: 184px;
+  min-height: 164px;
   overflow: visible;
 }
 
@@ -376,12 +376,9 @@
 .avatarTaskShell .avatarStage {
   position: relative;
   z-index: 1;
-  width: 196px;
-  height: 196px;
-  border-radius: 34px;
-  background:
-    radial-gradient(circle at 28% 24%, rgba(255, 255, 255, 0.34) 0%, rgba(255, 255, 255, 0) 48%),
-    linear-gradient(180deg, rgba(241, 239, 240, 0.98) 0%, rgba(236, 235, 236, 0.92) 100%);
+  width: 164px;
+  height: 164px;
+  border-radius: 30px;
   display: grid;
   place-items: center;
 }
@@ -454,11 +451,12 @@
 
 .avatarTaskShell .composer {
   position: relative;
+  margin-top: 44px;
   min-height: 120px;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 12px;
-  padding: 16px 16px 16px 18px;
+  padding: 12px 16px 0 18px;
   border-radius: 26px;
   border: 1px solid rgba(146, 127, 100, 0.12);
   background: var(--composer-bg);

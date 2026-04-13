@@ -1,4 +1,5 @@
 import { uid } from './id';
+import { materialContentToPlainText } from './materials';
 import type { ConversationMessage, PhaseId, TaskSet, ToolType } from './types';
 
 type ResponseMode =
@@ -104,6 +105,77 @@ function normalizeAssistantResponseFormatting(text: string) {
   return nextLines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
+function normalizeSectionHeading(line: string) {
+  return line
+    .toLowerCase()
+    .replace(/[*_`#]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/\s*:\s*$/, '')
+    .trim();
+}
+
+function collectLabeledSections(text: string) {
+  const canonicalByHeading = new Map<string, string>([
+    ['key findings', 'key findings'],
+    ['evidence', 'evidence'],
+    ['recommendation', 'recommendation'],
+    ['risk', 'risk / uncertainty'],
+    ['risk uncertainty', 'risk / uncertainty'],
+    ['risk / uncertainty', 'risk / uncertainty'],
+    ['meeting discussion questions', 'meeting discussion questions'],
+    ['discussion questions', 'meeting discussion questions'],
+    ['questions', 'meeting discussion questions']
+  ]);
+
+  const sections = new Map<string, string[]>();
+  let activeSection: string | null = null;
+
+  for (const rawLine of text.replace(/\r\n/g, '\n').split('\n')) {
+    const heading = canonicalByHeading.get(normalizeSectionHeading(rawLine)) ?? null;
+    if (heading) {
+      activeSection = heading;
+      if (!sections.has(activeSection)) {
+        sections.set(activeSection, []);
+      }
+      continue;
+    }
+
+    if (!activeSection) continue;
+    sections.get(activeSection)!.push(rawLine);
+  }
+
+  return sections;
+}
+
+function hasAnalysisMetaEvidenceLeak(text: string) {
+  const sections = collectLabeledSections(text);
+  const evidenceLikeText = [
+    sections.get('key findings')?.join('\n') ?? '',
+    sections.get('evidence')?.join('\n') ?? ''
+  ]
+    .join('\n')
+    .toLowerCase();
+
+  if (!evidenceLikeText.trim()) {
+    return false;
+  }
+
+  const metaPhrases = [
+    'packet objective',
+    'task objective',
+    'deliverable',
+    'ground the recommendation in the packet only',
+    '11:00 review',
+    '11 00 review',
+    'harbor room',
+    'hard stop',
+    'discussion-ready',
+    'meeting logistics'
+  ];
+
+  return metaPhrases.some((phrase) => evidenceLikeText.includes(phrase));
+}
+
 function detectResponseMode(args: {
   phase: PhaseId;
   currentSectionLabel: string;
@@ -163,8 +235,17 @@ function buildResponseModeInstructions(mode: ResponseMode) {
 - If you need context that is missing, say what is missing briefly.`;
     case 'analysis_brief':
       return `Response contract for this request:
-- Organize the answer as a concise work product.
-- Prefer a tight structure such as recommendation, evidence, risk, and discussion question when relevant.
+- Output a short analysis brief, not a full memo.
+- Use these section headers: **Key findings**, **Evidence**, **Recommendation**, **Risk / uncertainty**, **Meeting discussion questions**.
+- Keep Key findings to 2-3 sentences max.
+- Keep Evidence to 2-4 concrete bullet points only.
+- Keep Recommendation to 1-2 sentences.
+- Keep Risk / uncertainty to 1-2 sentences.
+- Give 1-2 discussion questions only.
+- Base Key findings and Evidence on the Primary analytical evidence section below.
+- Treat task deliverable requirements as workflow guidance, not as evidence.
+- Do not use meeting logistics, packet instructions, or formatting instructions as findings or evidence.
+- Use known constraints and risks as risks, limitations, or recommendation qualifiers rather than generic evidence filler.
 - Do not turn the answer into a general task list unless the user explicitly asks for one.`;
     case 'risk_or_question':
       return `Response contract for this request:
@@ -182,8 +263,11 @@ function buildResponseModeInstructions(mode: ResponseMode) {
 }
 
 function buildPacketContext(taskSet: TaskSet) {
-  return `Packet context:
-Task objective:
+  return `Shared packet context:
+Scenario context:
+- ${taskSet.background.scenario}
+
+Task deliverable requirements:
 - ${taskSet.background.objective}
 
 Known constraints and emphasis:
@@ -196,6 +280,36 @@ Use the categories above carefully:
 - Treat task objective, meeting deliverables, known constraints, and logistics as different types of information.
 - Do not convert logistics into tasks unless the user explicitly asks for logistics.
 - Do not convert supporting evidence or risks into standalone tasks unless the user explicitly asks for tasks that address them.`;
+}
+
+function buildAnalysisEvidenceContext(taskSet: TaskSet) {
+  const summary = taskSet.files.find((file) => file.id === 'analysis-summary');
+  const risks = taskSet.files.find((file) => file.id === 'analysis-risks');
+  const summaryText = summary ? materialContentToPlainText(summary.body) : '';
+  const risksText = risks ? materialContentToPlainText(risks.body) : '';
+
+  const sections = [
+    summaryText ? `Primary analytical evidence:\n${summaryText}` : '',
+    risksText ? `Known risks / constraints:\n${risksText}` : ''
+  ].filter(Boolean);
+
+  return sections.join('\n\n');
+}
+
+function buildModeSpecificContext(mode: ResponseMode, taskSet: TaskSet) {
+  if (mode === 'analysis_brief') {
+    return buildAnalysisEvidenceContext(taskSet);
+  }
+
+  return '';
+}
+
+function buildAnalysisRetryInstructions() {
+  return `Repair note for regeneration:
+- Your previous attempt used task instructions, deliverable requirements, or meeting logistics as analysis evidence.
+- Regenerate the analysis brief using only the Primary analytical evidence and Known risks / constraints sections as content evidence.
+- Do not mention packet objectives, packet instructions, or meeting logistics inside Key findings or Evidence.
+- Keep the brief concise and directly usable in the form fields.`;
 }
 
 function buildToolStyleInstructions(tool: ToolType) {
@@ -225,6 +339,40 @@ function extractErrorMessage(payload: unknown) {
   return null;
 }
 
+async function requestChatText(instructions: string, input: string) {
+  try {
+    const response = await fetch('/api/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ instructions, input })
+    });
+
+    const payload = (await response.json().catch(() => null)) as unknown;
+    if (!response.ok) {
+      if (response.status === 404 || response.status === 405 || response.status === 503) {
+        return { kind: 'unavailable' as const, text: extractErrorMessage(payload) ?? buildUnavailableMessage() };
+      }
+
+      throw new Error(extractErrorMessage(payload) ?? 'Assistant request failed.');
+    }
+
+    const text = payload && typeof payload === 'object' && 'text' in payload && typeof payload.text === 'string'
+      ? payload.text.trim()
+      : '';
+
+    return { kind: 'ok' as const, text };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    if (/Failed to fetch|NetworkError|Load failed/i.test(message)) {
+      return { kind: 'unavailable' as const, text: buildUnavailableMessage() };
+    }
+
+    throw error;
+  }
+}
+
 export async function requestAssistantReply(args: {
   tool: ToolType;
   taskSet: TaskSet;
@@ -244,6 +392,7 @@ export async function requestAssistantReply(args: {
     .join('\n\n');
 
   const toolStyleInstructions = buildToolStyleInstructions(args.tool);
+  const modeSpecificContext = buildModeSpecificContext(responseMode, args.taskSet);
   const instructions = `You are an in-app assistant inside a controlled office workflow simulation.
 Follow these rules:
 - Use only the fictional packet materials included below.
@@ -260,41 +409,31 @@ ${toolStyleInstructions}
 - Current phase: ${args.phase}.
 - Current focus section: ${args.currentSectionLabel}.
 
-Scenario:
-- ${args.taskSet.background.scenario}
-
 ${buildPacketContext(args.taskSet)}
+${modeSpecificContext ? `\n\n${modeSpecificContext}` : ''}
 `;
 
+  const input = `Conversation so far:\n${transcript}\n\nUser request:\n${args.userMessage}`;
+
   try {
-    const response = await fetch('/api/chat', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        instructions,
-        input: `Conversation so far:\n${transcript}\n\nUser request:\n${args.userMessage}`
-      })
-    });
-
-    const payload = (await response.json().catch(() => null)) as unknown;
-    if (!response.ok) {
-      if (response.status === 404 || response.status === 405 || response.status === 503) {
-        return {
-          id: uid('assistant'),
-          role: 'assistant' as const,
-          text: extractErrorMessage(payload) ?? buildUnavailableMessage(),
-          createdAt: Date.now()
-        };
-      }
-
-      throw new Error(extractErrorMessage(payload) ?? 'Assistant request failed.');
+    const initial = await requestChatText(instructions, input);
+    if (initial.kind !== 'ok') {
+      return {
+        id: uid('assistant'),
+        role: 'assistant' as const,
+        text: initial.text,
+        createdAt: Date.now()
+      };
     }
 
-    const text = payload && typeof payload === 'object' && 'text' in payload && typeof payload.text === 'string'
-      ? normalizeAssistantResponseFormatting(payload.text)
-      : '';
+    let text = normalizeAssistantResponseFormatting(initial.text);
+
+    if (responseMode === 'analysis_brief' && hasAnalysisMetaEvidenceLeak(text)) {
+      const repaired = await requestChatText(`${instructions}\n\n${buildAnalysisRetryInstructions()}`, input);
+      if (repaired.kind === 'ok') {
+        text = normalizeAssistantResponseFormatting(repaired.text);
+      }
+    }
 
     return {
       id: uid('assistant'),
@@ -303,16 +442,6 @@ ${buildPacketContext(args.taskSet)}
       createdAt: Date.now()
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : '';
-    if (/Failed to fetch|NetworkError|Load failed/i.test(message)) {
-      return {
-        id: uid('assistant'),
-        role: 'assistant' as const,
-        text: buildUnavailableMessage(),
-        createdAt: Date.now()
-      };
-    }
-
     throw error;
   }
 }

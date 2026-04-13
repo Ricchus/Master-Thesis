@@ -213,6 +213,7 @@ npm run build
 - 不要在 shell、reply playback queue、avatar coordinator 或 GIF 播放层拼接人格化文案
 - assistant 的格式契约也应放在 `src/lib/assistant.ts`：当前渲染层稳定支持的是 paragraphs + single-level lists，不要依赖嵌套列表或“冒号主项 + 子项碎片行”这种半结构化输出
 - 如果 assistant 在统一上下文下出现“把任务、约束、证据、logistics 混写”的问题，优先在 `src/lib/assistant.ts` 增加 request-type response contracts 和上下文分类规则，不要先用 phase-specific 最小上下文裁剪来补救
+- `analysis_brief` 的证据优先级也应在 `src/lib/assistant.ts` 里控制：共享上下文保留，但 analysis 模式要额外注入 `analysis-summary` / `analysis-risks` 内容，并在检测到“把 objective / logistics 当 evidence”时只做一次生成层 retry，不要把这类逻辑拆到 shell 或 validator
 
 ### 3. Shared assistant reply playback queue
 
@@ -500,6 +501,8 @@ Guide 完成后才进入正式实验流程。
 - 倒计时从 EMA 1 完成、正式进入工作区后开始
 - meeting 开始后立即 hard cutoff
 - hard cutoff 后编辑锁定
+- `analysis` 与 `urgent` 都属于 terminal work stage：时间到了会结束任务，通过验收也会结束任务并进入 `EMA 3`
+- urgent task 当前在 `analysis` 开始后约 3 分钟触发；若 `analysis` 已先通过并进入 `EMA 3`，则不会再触发 urgent
 
 ---
 
@@ -526,6 +529,7 @@ Command + Option + Shift + M
 - 在 researcher mode 下，顶部 timeline 节点可点击，能直接跳转阶段
 - 在 researcher mode 下，header 还会显示 researcher-only 的 `Urgent task` 倒计时或状态
 - researcher timeline 跳到 `analysis / urgent / ema3 / cutoff / ema4` 时，会同步重建这几个阶段对应的时间戳语义，保证 urgent trigger 与 cutoff 显示可信
+- 若 researcher 直接跳到 `EMA 3` 且本轮未触发 urgent，header 会显示 `Urgent task: Not triggered`
 - 为避免误触，输入框 / textarea / select / contenteditable 内不会触发该快捷键
 
 ### reset

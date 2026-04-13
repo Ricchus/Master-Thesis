@@ -22,7 +22,7 @@ import type {
 import { validateAnalysis, validateReplies, validateTaskBreakdown, validateUrgent } from './lib/validation'
 
 const ROUND_DURATION_MS = 15 * 60 * 1000
-const URGENT_TRIGGER_MS = 5 * 60 * 1000
+const URGENT_TRIGGER_MS = 3 * 60 * 1000
 const RESEARCHER_KEY_CODE = 'KeyM'
 const RESET_KEY_CODE = 'KeyR'
 
@@ -138,11 +138,19 @@ function timelineStatus(round: RoundState, id: PhaseId) {
 }
 
 function getResearcherUrgentCountdown(round: RoundState, now: number) {
-  if (round.urgentStartedAt || round.phase === 'urgent' || round.phase === 'ema3') {
+  if (round.urgentStartedAt || round.phase === 'urgent') {
     return {
       label: 'Urgent task',
       tone: 'done' as const,
       value: 'Shown'
+    }
+  }
+
+  if (round.phase === 'ema3') {
+    return {
+      label: 'Urgent task',
+      tone: 'inactive' as const,
+      value: 'Not triggered'
     }
   }
 
@@ -172,6 +180,7 @@ function getResearcherUrgentCountdown(round: RoundState, now: number) {
 
 function applyResearcherPhaseTiming(round: RoundState, target: PhaseId) {
   const currentTime = Date.now()
+  const hadUrgent = Boolean(round.urgentStartedAt || round.phase === 'urgent')
   round.phase = target
 
   if (target === 'ema1') {
@@ -198,13 +207,25 @@ function applyResearcherPhaseTiming(round: RoundState, target: PhaseId) {
     return
   }
 
-  if (target === 'urgent' || target === 'ema3') {
+  if (target === 'urgent') {
     round.startedAt = currentTime
     round.analysisStartedAt = currentTime - URGENT_TRIGGER_MS
     round.urgentStartedAt = currentTime
     round.cutoffReachedAt = null
     round.activeMaterialView = 'files'
     round.selectedFileId = 'urgent-card'
+    return
+  }
+
+  if (target === 'ema3') {
+    round.startedAt = currentTime
+    round.analysisStartedAt = hadUrgent ? currentTime - URGENT_TRIGGER_MS : null
+    round.urgentStartedAt = hadUrgent ? currentTime : null
+    round.cutoffReachedAt = null
+    if (hadUrgent) {
+      round.activeMaterialView = 'files'
+      round.selectedFileId = 'urgent-card'
+    }
     return
   }
 
@@ -321,7 +342,7 @@ function App() {
 
     if (now - liveRound.startedAt >= ROUND_DURATION_MS) {
       setSession((prev) => withCurrentRound(prev, (round) => {
-        if (round.phase !== 'cutoff' && round.phase !== 'ema4' && round.phase !== 'round_complete') {
+        if (round.phase !== 'cutoff' && round.phase !== 'ema3' && round.phase !== 'ema4' && round.phase !== 'round_complete') {
           round.phase = 'cutoff'
           round.cutoffReachedAt = Date.now()
         }
@@ -439,6 +460,8 @@ function App() {
         round.phase = 'stage1_task_breakdown'
       } else if (kind === 'stage1_task_breakdown') {
         round.phase = 'ema2'
+      } else if (kind === 'analysis') {
+        round.phase = 'ema3'
       } else if (kind === 'urgent') {
         round.phase = 'ema3'
       }
@@ -762,7 +785,7 @@ function App() {
         <div className="deliverableHeader">
           <div>
             <h2>Stage 2 · Analysis brief</h2>
-            <p>Use the packet only. You can validate the brief before the meeting starts.</p>
+            <p>Use the packet only. Passing this check submits the analysis brief and ends the task.</p>
           </div>
           <button
             type="button"
@@ -770,7 +793,7 @@ function App() {
             onClick={() => runValidation('analysis')}
             disabled={validationBusy}
           >
-            Check analysis brief
+            Check and submit analysis brief
           </button>
         </div>
         {renderValidation(displayRound.validation.analysis)}
