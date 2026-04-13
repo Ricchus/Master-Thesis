@@ -286,6 +286,7 @@
 
 .avatarTaskShell .avatarDock {
   position: relative;
+  isolation: isolate;
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -295,6 +296,7 @@
 
 .avatarTaskShell .avatarThoughtBubble {
   position: absolute;
+  z-index: 2;
   top: -4px;
   right: 10px;
   display: inline-flex;
@@ -307,6 +309,7 @@
   background: rgba(255, 255, 255, 0.94);
   border: 1px solid rgba(146, 127, 100, 0.14);
   box-shadow: 0 12px 24px rgba(117, 101, 81, 0.12);
+  pointer-events: none;
 }
 
 .avatarTaskShell .avatarThoughtBubble::before,
@@ -359,6 +362,7 @@
 .avatarTaskShell .avatarDock::before {
   content: '';
   position: absolute;
+  z-index: 0;
   bottom: 14px;
   left: 50%;
   transform: translateX(-50%);
@@ -370,6 +374,8 @@
 }
 
 .avatarTaskShell .avatarStage {
+  position: relative;
+  z-index: 1;
   width: 196px;
   height: 196px;
   border-radius: 34px;

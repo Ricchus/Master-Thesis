@@ -5,6 +5,97 @@ function buildUnavailableMessage() {
   return 'Live assistant replies are unavailable here. Deploy the app on Vercel with OPENAI_API_KEY configured, or use `vercel dev` for local backend routes.';
 }
 
+function looksLikeListItem(line: string) {
+  return /^\s*(?:[-*•]|\d+\.)\s+/.test(line);
+}
+
+function stripListMarker(line: string) {
+  return line.replace(/^\s*(?:[-*•]|\d+\.)\s+/, '').trim();
+}
+
+function endsWithColon(line: string) {
+  return /:\s*$/.test(line);
+}
+
+function isShortFragment(line: string) {
+  const trimmed = line.trim();
+  if (!trimmed) return false;
+  if (trimmed.length > 90) return false;
+  return true;
+}
+
+function joinFragments(parts: string[]) {
+  if (parts.length === 0) return '';
+  if (parts.length === 1) return parts[0];
+  return parts.join('; ');
+}
+
+function normalizeAssistantResponseFormatting(text: string) {
+  const normalized = text.replace(/\r\n/g, '\n').trim();
+  if (!normalized) {
+    return normalized;
+  }
+
+  const sourceLines = normalized.split('\n');
+  const nextLines: string[] = [];
+
+  for (let index = 0; index < sourceLines.length; index += 1) {
+    const currentRaw = sourceLines[index];
+    const current = currentRaw.trim();
+
+    if (!current) {
+      if (nextLines.at(-1) !== '') {
+        nextLines.push('');
+      }
+      continue;
+    }
+
+    const isListItem = looksLikeListItem(current);
+    const listPrefixMatch = current.match(/^\s*((?:[-*•]|\d+\.))\s+/);
+    const listPrefix = listPrefixMatch?.[1] ?? null;
+    const baseContent = isListItem ? stripListMarker(current) : current;
+
+    if (!endsWithColon(baseContent)) {
+      nextLines.push(current);
+      continue;
+    }
+
+    const fragments: string[] = [];
+    let nextIndex = index + 1;
+
+    while (nextIndex < sourceLines.length) {
+      const candidate = sourceLines[nextIndex].trim();
+      if (!candidate) {
+        break;
+      }
+
+      if (looksLikeListItem(candidate)) {
+        fragments.push(stripListMarker(candidate));
+        nextIndex += 1;
+        continue;
+      }
+
+      if (!isShortFragment(candidate)) {
+        break;
+      }
+
+      fragments.push(candidate);
+      nextIndex += 1;
+    }
+
+    if (fragments.length === 0 || fragments.length > 4) {
+      nextLines.push(current);
+      continue;
+    }
+
+    const mergedContent = `${baseContent} ${joinFragments(fragments)}`.trim();
+    nextLines.push(listPrefix ? `${listPrefix} ${mergedContent}` : mergedContent);
+    index = nextIndex - 1;
+  }
+
+  return nextLines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 function buildToolStyleInstructions(tool: ToolType) {
   if (tool === 'avatar') {
     return `Tool persona rules:
@@ -52,6 +143,10 @@ Follow these rules:
 - Do not invent facts that are not grounded in the packet.
 - Be concise, practical, and work-product oriented.
 - If the user asks for something unsupported by the packet, say what is missing.
+- If you provide a checklist, task list, bullets, or steps, use standard single-level markdown bullets or numbered items only.
+- Do not use nested bullets or sub-bullets.
+- Do not write a bullet that ends with a colon and then continue with separate child lines.
+- If a bullet needs details, keep them on the same line using a short clause after a colon or semicolon.
 ${toolStyleInstructions}
 - Current phase: ${args.phase}.
 - Current focus section: ${args.currentSectionLabel}.
@@ -90,7 +185,7 @@ Hints: ${args.taskSet.analysisPromptHints.join(' | ')}
     }
 
     const text = payload && typeof payload === 'object' && 'text' in payload && typeof payload.text === 'string'
-      ? payload.text.trim()
+      ? normalizeAssistantResponseFormatting(payload.text)
       : '';
 
     return {
