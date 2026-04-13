@@ -212,6 +212,7 @@ npm run build
 - assistant 的文本风格、人设、prompt-level persona 差异也应放在 `src/lib/assistant.ts`
 - 不要在 shell、reply playback queue、avatar coordinator 或 GIF 播放层拼接人格化文案
 - assistant 的格式契约也应放在 `src/lib/assistant.ts`：当前渲染层稳定支持的是 paragraphs + single-level lists，不要依赖嵌套列表或“冒号主项 + 子项碎片行”这种半结构化输出
+- 如果 assistant 在统一上下文下出现“把任务、约束、证据、logistics 混写”的问题，优先在 `src/lib/assistant.ts` 增加 request-type response contracts 和上下文分类规则，不要先用 phase-specific 最小上下文裁剪来补救
 
 ### 3. Shared assistant reply playback queue
 

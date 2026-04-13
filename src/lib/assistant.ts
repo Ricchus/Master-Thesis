@@ -1,6 +1,14 @@
 import { uid } from './id';
 import type { ConversationMessage, PhaseId, TaskSet, ToolType } from './types';
 
+type ResponseMode =
+  | 'task_breakdown'
+  | 'draft_reply'
+  | 'analysis_brief'
+  | 'risk_or_question'
+  | 'summary'
+  | 'general_help';
+
 function buildUnavailableMessage() {
   return 'Live assistant replies are unavailable here. Deploy the app on Vercel with OPENAI_API_KEY configured, or use `vercel dev` for local backend routes.';
 }
@@ -44,7 +52,7 @@ function normalizeAssistantResponseFormatting(text: string) {
     const current = currentRaw.trim();
 
     if (!current) {
-      if (nextLines.at(-1) !== '') {
+      if (nextLines.length === 0 || nextLines[nextLines.length - 1] !== '') {
         nextLines.push('');
       }
       continue;
@@ -96,6 +104,100 @@ function normalizeAssistantResponseFormatting(text: string) {
   return nextLines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
+function detectResponseMode(args: {
+  phase: PhaseId;
+  currentSectionLabel: string;
+  userMessage: string;
+}): ResponseMode {
+  const source = args.userMessage.toLowerCase();
+
+  if (
+    /\b(task breakdown|pre-?meeting|before the 11:00|before 11:00|top 3|top three|priorit|checklist|identify the work|what still needs to be done|what do i still need to do)\b/.test(source)
+  ) {
+    return 'task_breakdown';
+  }
+
+  if (
+    /\b(draft|compose|write|revise|polish)\b/.test(source) &&
+    /\b(reply|email|response|message)\b/.test(source)
+  ) {
+    return 'draft_reply';
+  }
+
+  if (/\b(reply to|respond to|email to)\b/.test(source)) {
+    return 'draft_reply';
+  }
+
+  if (
+    /\b(recommendation|brief|analysis brief|briefing note|decision note|meeting brief|recommend)\b/.test(source)
+  ) {
+    return 'analysis_brief';
+  }
+
+  if (/\b(risk|risks|discussion question|discussion questions|question for the meeting|questions for the meeting)\b/.test(source)) {
+    return 'risk_or_question';
+  }
+
+  if (/\b(summarize|summary|recap|what matters|key points|key takeaways)\b/.test(source)) {
+    return 'summary';
+  }
+
+  return 'general_help';
+}
+
+function buildResponseModeInstructions(mode: ResponseMode) {
+  switch (mode) {
+    case 'task_breakdown':
+      return `Response contract for this request:
+- Output exactly 3 numbered priority actions.
+- Each item must be one concrete action to complete before the 11:00 meeting.
+- Merge overlapping work instead of listing near-duplicates.
+- Do not list logistics, background facts, risks, or evidence as separate items unless they require a concrete action.
+- Do not restate the same deliverable in multiple forms.
+- Keep each item to one sentence.`;
+    case 'draft_reply':
+      return `Response contract for this request:
+- Give the user a clean, directly usable draft.
+- Keep the draft itself professional and sendable.
+- Do not add extra checklist items or meeting logistics unless the user explicitly asks for them.
+- If you need context that is missing, say what is missing briefly.`;
+    case 'analysis_brief':
+      return `Response contract for this request:
+- Organize the answer as a concise work product.
+- Prefer a tight structure such as recommendation, evidence, risk, and discussion question when relevant.
+- Do not turn the answer into a general task list unless the user explicitly asks for one.`;
+    case 'risk_or_question':
+      return `Response contract for this request:
+- Answer only the requested risk, risks, discussion question, or questions.
+- Do not expand into a broader checklist or recap unless the user explicitly asks for that.`;
+    case 'summary':
+      return `Response contract for this request:
+- Give a concise summary only.
+- Do not turn the answer into a task list or meeting plan unless the user explicitly asks for one.`;
+    default:
+      return `Response contract for this request:
+- Answer the user's request directly.
+- Keep categories of information separate: tasks, evidence, constraints, and logistics should not be mixed together unless the user explicitly asks for that synthesis.`;
+  }
+}
+
+function buildPacketContext(taskSet: TaskSet) {
+  return `Packet context:
+Task objective:
+- ${taskSet.background.objective}
+
+Known constraints and emphasis:
+- ${taskSet.analysisPromptHints.join('\n- ')}
+
+Meeting logistics:
+- ${taskSet.meetingTimeLabel}
+
+Use the categories above carefully:
+- Treat task objective, meeting deliverables, known constraints, and logistics as different types of information.
+- Do not convert logistics into tasks unless the user explicitly asks for logistics.
+- Do not convert supporting evidence or risks into standalone tasks unless the user explicitly asks for tasks that address them.`;
+}
+
 function buildToolStyleInstructions(tool: ToolType) {
   if (tool === 'avatar') {
     return `Tool persona rules:
@@ -131,6 +233,11 @@ export async function requestAssistantReply(args: {
   userMessage: string;
   conversation: ConversationMessage[];
 }) {
+  const responseMode = detectResponseMode({
+    phase: args.phase,
+    currentSectionLabel: args.currentSectionLabel,
+    userMessage: args.userMessage
+  });
   const transcript = args.conversation
     .slice(-10)
     .map((message) => `${message.role.toUpperCase()}: ${message.text}`)
@@ -147,15 +254,16 @@ Follow these rules:
 - Do not use nested bullets or sub-bullets.
 - Do not write a bullet that ends with a colon and then continue with separate child lines.
 - If a bullet needs details, keep them on the same line using a short clause after a colon or semicolon.
+- Detected request mode: ${responseMode}.
+${buildResponseModeInstructions(responseMode)}
 ${toolStyleInstructions}
 - Current phase: ${args.phase}.
 - Current focus section: ${args.currentSectionLabel}.
 
-Packet context:
-Scenario: ${args.taskSet.background.scenario}
-Objective: ${args.taskSet.background.objective}
-Meeting time: ${args.taskSet.meetingTimeLabel}
-Hints: ${args.taskSet.analysisPromptHints.join(' | ')}
+Scenario:
+- ${args.taskSet.background.scenario}
+
+${buildPacketContext(args.taskSet)}
 `;
 
   try {
