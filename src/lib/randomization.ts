@@ -47,7 +47,7 @@ function buildRound(roundNumber: 1 | 2, tool: ToolType, taskSetId: 'A' | 'B', em
         role: 'assistant',
         text:
           tool === 'avatar'
-            ? "Hi, I'm your avatar assistant. I can help summarize the packet and draft grounded responses."
+            ? "Hi Boss, I'm Momo. I can help summarize the packet and draft grounded responses."
             : 'Hello. I can help summarize packet materials and draft grounded responses.',
         createdAt: Date.now()
       }

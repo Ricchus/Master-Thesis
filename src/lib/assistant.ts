@@ -10,8 +10,20 @@ type ResponseMode =
   | 'summary'
   | 'general_help';
 
+type AvatarLanguage = 'zh' | 'en';
+
 function buildUnavailableMessage() {
   return 'Live assistant replies are unavailable here. Deploy the app on Vercel with OPENAI_API_KEY configured, or use `vercel dev` for local backend routes.';
+}
+
+function buildToolUnavailableMessage(tool: ToolType, avatarLanguage: AvatarLanguage) {
+  if (tool !== 'avatar') {
+    return buildUnavailableMessage();
+  }
+
+  return avatarLanguage === 'zh'
+    ? '老板，这里暂时拿不到实时回复。把应用部署到 Vercel 并配置 OPENAI_API_KEY，或者本地用 `vercel dev`，我就能继续帮你。'
+    : "Boss, live replies aren't available here right now. Deploy the app on Vercel with OPENAI_API_KEY configured, or use `vercel dev` locally, and I'll keep helping there.";
 }
 
 function looksLikeListItem(line: string) {
@@ -312,17 +324,71 @@ function buildAnalysisRetryInstructions() {
 - Keep the brief concise and directly usable in the form fields.`;
 }
 
-function buildToolStyleInstructions(tool: ToolType) {
+function looksChinese(text: string) {
+  return /[\u3400-\u9fff]/.test(text);
+}
+
+function detectAvatarLanguage(args: {
+  userMessage: string;
+  conversation: ConversationMessage[];
+}): AvatarLanguage {
+  const directRequest = args.userMessage.toLowerCase();
+
+  if (/\b(in chinese|use chinese|reply in chinese|中文|汉语|用中文)\b/.test(directRequest)) {
+    return 'zh';
+  }
+
+  if (/\b(in english|use english|reply in english|英文|用英文)\b/.test(directRequest)) {
+    return 'en';
+  }
+
+  if (looksChinese(args.userMessage)) {
+    return 'zh';
+  }
+
+  const recentUserMessages = args.conversation
+    .filter((message) => message.role === 'user')
+    .slice(-4)
+    .map((message) => message.text);
+
+  const chineseCount = recentUserMessages.filter(looksChinese).length;
+  if (chineseCount >= 2) {
+    return 'zh';
+  }
+
+  return 'en';
+}
+
+function buildAvatarPersonaInstructions(language: AvatarLanguage) {
+  const languageDirective = language === 'zh'
+    ? `- Reply in Chinese.
+- Address the user as “老板” when it sounds natural.
+- Keep the full answer in Chinese unless the user explicitly asks for English.`
+    : `- Reply in English.
+- Address the user as “Boss” when it sounds natural.
+- Keep the full answer in English unless the user explicitly asks for Chinese.`;
+
+  return `Avatar persona rules:
+- You are Momo, also called 帽帽, a companion-style smart assistant and a long-tailed tit wearing a magic hat.
+- Be warm, clever, restrained, and sincere.
+- Feel light and cute on the surface, but sharp, reliable, and observant underneath.
+- Do not flatter, fawn, act clingy, or overdo reassurance.
+- Sound natural, conversational, and concise.
+- Lead with the direct answer or conclusion first, then add steps or explanation only if helpful.
+- Keep paragraphs short, usually one to two sentences.
+- When there are multiple steps or checks, prefer 1. 2. 3. numbered items.
+- For a small number of parallel points, short single-level bullets are fine.
+- Leave a blank line between paragraphs or list blocks.
+- A very small touch of magic flavor is allowed, but keep it rare and restrained.
+- If you are uncertain, say so plainly.
+- Never sacrifice accuracy or grounding for persona.
+- When drafting text the user may send to someone else, keep the draft itself clean and professional; do not insert the Boss/老板 address into the drafted external message unless the user explicitly asks for it.
+${languageDirective}`;
+}
+
+function buildToolStyleInstructions(tool: ToolType, avatarLanguage: AvatarLanguage) {
   if (tool === 'avatar') {
-    return `Tool persona rules:
-- Write in a warm, supportive avatar-assistant style.
-- For normal assistant replies, include one very short supportive opener before the main answer and one very short supportive closer after the main answer.
-- Keep the opener and closer as separate short paragraphs, each only one sentence.
-- The main body must stay concise, practical, grounded in the packet, and work-product oriented.
-- Do not let the supportive framing take over the answer.
-- Do not use emojis, internet slang, multiple exclamation points, or exaggerated praise.
-- If you provide bullet points or numbered steps, keep the opener before the list and the closer after the list.
-- If you draft text the user may send to someone else, keep the draft itself clean and professional. Put any supportive avatar framing outside the drafted text, not inside it.`;
+    return buildAvatarPersonaInstructions(avatarLanguage);
   }
 
   return `Tool style rules:
@@ -381,6 +447,9 @@ export async function requestAssistantReply(args: {
   userMessage: string;
   conversation: ConversationMessage[];
 }) {
+  const avatarLanguage = args.tool === 'avatar'
+    ? detectAvatarLanguage({ userMessage: args.userMessage, conversation: args.conversation })
+    : 'en';
   const responseMode = detectResponseMode({
     phase: args.phase,
     currentSectionLabel: args.currentSectionLabel,
@@ -391,7 +460,7 @@ export async function requestAssistantReply(args: {
     .map((message) => `${message.role.toUpperCase()}: ${message.text}`)
     .join('\n\n');
 
-  const toolStyleInstructions = buildToolStyleInstructions(args.tool);
+  const toolStyleInstructions = buildToolStyleInstructions(args.tool, avatarLanguage);
   const modeSpecificContext = buildModeSpecificContext(responseMode, args.taskSet);
   const instructions = `You are an in-app assistant inside a controlled office workflow simulation.
 Follow these rules:
@@ -421,7 +490,7 @@ ${modeSpecificContext ? `\n\n${modeSpecificContext}` : ''}
       return {
         id: uid('assistant'),
         role: 'assistant' as const,
-        text: initial.text,
+        text: buildToolUnavailableMessage(args.tool, avatarLanguage),
         createdAt: Date.now()
       };
     }

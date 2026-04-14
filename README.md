@@ -210,6 +210,7 @@ npm run build
 - 不要再把 reveal / queued / static 这种 UI 播放状态写回 `ConversationMessage`
 - `assistantBusy` 只表示“请求是否还在飞行中”，不表示“assistant 回复是否已经 reveal 完成”
 - assistant 的文本风格、人设、prompt-level persona 差异也应放在 `src/lib/assistant.ts`
+- avatar assistant 当前复刻的是 `帽帽 / Momo` 的说话方式：默认称呼 `Boss/老板`，温柔、机灵、克制、真诚，结论先行、短段落、必要时优先 `1. 2. 3.`；不要再在 shell 层重新拼接固定 opener/closer
 - 不要在 shell、reply playback queue、avatar coordinator 或 GIF 播放层拼接人格化文案
 - assistant 的格式契约也应放在 `src/lib/assistant.ts`：当前渲染层稳定支持的是 paragraphs + single-level lists，不要依赖嵌套列表或“冒号主项 + 子项碎片行”这种半结构化输出
 - 如果 assistant 在统一上下文下出现“把任务、约束、证据、logistics 混写”的问题，优先在 `src/lib/assistant.ts` 增加 request-type response contracts 和上下文分类规则，不要先用 phase-specific 最小上下文裁剪来补救
