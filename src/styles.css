@@ -134,6 +134,23 @@ code {
   min-width: 140px;
 }
 
+.consentCard {
+  width: min(860px, 100%);
+}
+
+.consentBody {
+  max-height: min(58svh, 640px);
+  overflow: auto;
+  padding: 20px 22px;
+  border-radius: 22px;
+  border: 1px solid rgba(15, 111, 255, 0.14);
+  background: rgba(248, 251, 255, 0.86);
+}
+
+.consentFooterNote {
+  font-size: 14px;
+}
+
 .appShell {
   height: 100svh;
   overflow: hidden;

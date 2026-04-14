@@ -7,15 +7,27 @@ type LegacySessionState = Omit<SessionState, 'version' | 'appFlow' | 'guideStep'
   version: 2;
 };
 
-function migrateSession(parsed: LegacySessionState | SessionState): SessionState {
-  if ((parsed as SessionState).version === 3) {
+type TransitionalSessionState = SessionState & {
+  version: 3;
+};
+
+function migrateSession(parsed: LegacySessionState | TransitionalSessionState | SessionState): SessionState {
+  if ((parsed as SessionState).version === 4) {
     return parsed as SessionState;
+  }
+
+  if ((parsed as TransitionalSessionState).version === 3) {
+    const transitional = parsed as TransitionalSessionState;
+    return {
+      ...transitional,
+      version: 4,
+    };
   }
 
   const legacy = parsed as LegacySessionState;
   return {
     ...legacy,
-    version: 3,
+    version: 4,
     appFlow: legacy.rounds[1].phase === 'finished' ? 'finished' : 'study',
     guideStep: 0,
   };
@@ -27,8 +39,8 @@ export function loadSession(): SessionState {
   if (!raw) return createNewSession();
 
   try {
-    const parsed = JSON.parse(raw) as LegacySessionState | SessionState;
-    if (!parsed || (parsed.version !== 2 && parsed.version !== 3)) {
+    const parsed = JSON.parse(raw) as LegacySessionState | TransitionalSessionState | SessionState;
+    if (!parsed || (parsed.version !== 2 && parsed.version !== 3 && parsed.version !== 4)) {
       return createNewSession();
     }
     return migrateSession(parsed);

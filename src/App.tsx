@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type WheelEvent as ReactWheelEvent } from 'react'
 import { AvatarAssistantShell } from './assistant-shells/avatar-ui/AvatarAssistantShell'
 import { ChatgptAssistantShell } from './assistant-shells/chatgpt-ui/ChatgptAssistantShell'
+import { ConsentScreen } from './components/ConsentScreen'
 import { GuideOverlay } from './components/GuideOverlay'
 import { IntroScreen } from './components/IntroScreen'
 import { MaterialContent } from './components/materials/MaterialContent'
@@ -427,6 +428,13 @@ function App() {
   function startGuide() {
     updateSession((draft) => {
       draft.appFlow = 'guide'
+      draft.guideStep = 0
+    })
+  }
+
+  function agreeToConsent() {
+    updateSession((draft) => {
+      draft.appFlow = 'intro'
       draft.guideStep = 0
     })
   }
@@ -1083,7 +1091,9 @@ function App() {
 
   return (
     <>
-      {session.appFlow === 'intro' ? (
+      {session.appFlow === 'consent' ? (
+        <ConsentScreen onAgree={agreeToConsent} />
+      ) : session.appFlow === 'intro' ? (
         <IntroScreen
           participantId={session.participantId}
           copyState={copyState}

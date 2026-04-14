@@ -3,7 +3,7 @@ export type TaskSetId = 'A' | 'B';
 export type EmergencyType = 'A' | 'B';
 export type MaterialView = 'inbox' | 'files';
 export type FileDocId = 'analysis-summary' | 'analysis-risks' | 'meeting-time' | 'urgent-card';
-export type AppFlow = 'intro' | 'guide' | 'study' | 'finished';
+export type AppFlow = 'consent' | 'intro' | 'guide' | 'study' | 'finished';
 
 export type PhaseId =
   | 'round_intro'

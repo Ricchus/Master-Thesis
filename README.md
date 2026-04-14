@@ -691,13 +691,14 @@ Round 2 / EMA 4: https://gatech.co1.qualtrics.com/jfe/form/SV_87x4PTPFdihypb8
 本次新增了 app-level flow 与 onboarding 相关状态：
 
 - `appFlow`
+  - `consent`
   - `intro`
   - `guide`
   - `study`
   - `finished`
 - `guideStep`
 
-旧版本地 session 会在加载时自动迁移到新版结构。
+新 session 会先进入 consent，再进入 `intro -> guide -> study`。旧版本地 session 会在加载时自动迁移到新版结构，但不会被强制打回 consent。
 
 ---
 

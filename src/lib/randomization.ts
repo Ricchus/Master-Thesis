@@ -66,12 +66,12 @@ export function createNewSession(): SessionState {
   const round2Emergency: EmergencyType = round1Emergency === 'A' ? 'B' : 'A';
 
   return {
-    version: 3,
+    version: 4,
     participantId: buildParticipantId(comboCode),
     comboCode,
     createdAt: Date.now(),
     currentRoundIndex: 0,
-    appFlow: 'intro',
+    appFlow: 'consent',
     guideStep: 0,
     researcherMode: false,
     rounds: [
