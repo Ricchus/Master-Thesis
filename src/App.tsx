@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode, type WheelEvent as ReactWheelEvent } from 'react'
 import { AvatarAssistantShell } from './assistant-shells/avatar-ui/AvatarAssistantShell'
 import { ChatgptAssistantShell } from './assistant-shells/chatgpt-ui/ChatgptAssistantShell'
 import { GuideOverlay } from './components/GuideOverlay'
@@ -272,6 +272,38 @@ function nextAppFlowAfterFinish(flow: AppFlow) {
   return flow === 'guide' ? 'study' : flow
 }
 
+function FieldGroup({
+  children,
+  className,
+  id,
+  label,
+}: {
+  children: ReactNode
+  className?: string
+  id: string
+  label: string
+}) {
+  return (
+    <div className={className ? `fieldGroup ${className}` : 'fieldGroup'}>
+      <span className="fieldLabel" id={`${id}-label`}>{label}</span>
+      {children}
+    </div>
+  )
+}
+
+function getWheelDeltaInPixels(event: ReactWheelEvent<HTMLElement>) {
+  if (event.deltaMode === 1) {
+    return { x: event.deltaX * 16, y: event.deltaY * 16 }
+  }
+
+  if (event.deltaMode === 2) {
+    const pageHeight = event.currentTarget.clientHeight || 1
+    return { x: event.deltaX * pageHeight, y: event.deltaY * pageHeight }
+  }
+
+  return { x: event.deltaX, y: event.deltaY }
+}
+
 function App() {
   const [session, setSession] = useState<SessionState>(() => loadSession())
   const [now, setNow] = useState(Date.now())
@@ -526,6 +558,33 @@ function App() {
     }))
   }
 
+  function handleWorkAreaWheelCapture(event: ReactWheelEvent<HTMLDivElement>) {
+    const target = event.target
+    if (!(target instanceof HTMLElement)) return
+
+    const textarea = target.closest('textarea')
+    if (!(textarea instanceof HTMLTextAreaElement)) return
+
+    const isActiveTextarea =
+      document.activeElement === textarea &&
+      !textarea.disabled &&
+      !textarea.readOnly
+
+    if (isActiveTextarea) return
+
+    const scrollContainer =
+      textarea.closest('.deliverableSection') ??
+      event.currentTarget
+
+    if (!(scrollContainer instanceof HTMLElement)) return
+
+    const { x, y } = getWheelDeltaInPixels(event)
+    if (x === 0 && y === 0) return
+
+    event.preventDefault()
+    scrollContainer.scrollBy({ left: x, top: y, behavior: 'auto' })
+  }
+
   const selectedEmail = taskSet.emails.find((item) => item.id === displayRound.selectedEmailId) ?? taskSet.emails[0]
   const inactiveUrgentCardContent: MaterialBlock[] = [
     { type: 'note', content: [{ type: 'text', text: 'The urgent task card will appear here if it is triggered during analysis.' }] }
@@ -718,18 +777,28 @@ function App() {
             return (
               <div className="card" key={email.id}>
                 <div className="cardTitle">Reply to Email {email.id}</div>
-                <label>
-                  <span>To</span>
-                  <input value={draft.to} onChange={(event) => updateReply(email.id, 'to', event.target.value)} />
-                </label>
-                <label>
-                  <span>Subject</span>
-                  <input value={draft.subject} onChange={(event) => updateReply(email.id, 'subject', event.target.value)} />
-                </label>
-                <label>
-                  <span>Body</span>
-                  <textarea value={draft.body} onChange={(event) => updateReply(email.id, 'body', event.target.value)} rows={6} />
-                </label>
+                <FieldGroup id={`reply-${email.id}-to`} label="To">
+                  <input
+                    aria-labelledby={`reply-${email.id}-to-label`}
+                    value={draft.to}
+                    onChange={(event) => updateReply(email.id, 'to', event.target.value)}
+                  />
+                </FieldGroup>
+                <FieldGroup id={`reply-${email.id}-subject`} label="Subject">
+                  <input
+                    aria-labelledby={`reply-${email.id}-subject-label`}
+                    value={draft.subject}
+                    onChange={(event) => updateReply(email.id, 'subject', event.target.value)}
+                  />
+                </FieldGroup>
+                <FieldGroup id={`reply-${email.id}-body`} label="Body">
+                  <textarea
+                    aria-labelledby={`reply-${email.id}-body-label`}
+                    value={draft.body}
+                    onChange={(event) => updateReply(email.id, 'body', event.target.value)}
+                    rows={6}
+                  />
+                </FieldGroup>
               </div>
             )
           })}
@@ -758,15 +827,15 @@ function App() {
         {renderValidation(displayRound.validation.stage1_task_breakdown)}
         <div className="card single">
           {[0, 1, 2, 3].map((index) => (
-            <label key={index}>
-              <span>Task {index + 1}</span>
+            <FieldGroup id={`task-breakdown-${index}`} key={index} label={`Task ${index + 1}`}>
               <textarea
+                aria-labelledby={`task-breakdown-${index}-label`}
                 value={displayRound.taskBreakdown[index]}
                 onChange={(event) => updateCurrentRound((round) => { round.taskBreakdown[index] = event.target.value })}
                 rows={2}
                 placeholder={index < 3 ? 'Required' : 'Optional'}
               />
-            </label>
+            </FieldGroup>
           ))}
         </div>
       </section>
@@ -798,11 +867,21 @@ function App() {
         </div>
         {renderValidation(displayRound.validation.analysis)}
         <div className="card single analysisGrid">
-          <label><span>Key findings</span><textarea rows={4} value={displayRound.analysis.keyFindings} onChange={(event) => updateAnalysisField('keyFindings', event.target.value)} /></label>
-          <label><span>Evidence</span><textarea rows={4} value={displayRound.analysis.evidence} onChange={(event) => updateAnalysisField('evidence', event.target.value)} /></label>
-          <label><span>Recommendation</span><textarea rows={4} value={displayRound.analysis.recommendation} onChange={(event) => updateAnalysisField('recommendation', event.target.value)} /></label>
-          <label><span>Risk / uncertainty</span><textarea rows={3} value={displayRound.analysis.risk} onChange={(event) => updateAnalysisField('risk', event.target.value)} /></label>
-          <label><span>Meeting discussion questions</span><textarea rows={3} value={displayRound.analysis.questions} onChange={(event) => updateAnalysisField('questions', event.target.value)} /></label>
+          <FieldGroup id="analysis-key-findings" label="Key findings">
+            <textarea aria-labelledby="analysis-key-findings-label" rows={4} value={displayRound.analysis.keyFindings} onChange={(event) => updateAnalysisField('keyFindings', event.target.value)} />
+          </FieldGroup>
+          <FieldGroup id="analysis-evidence" label="Evidence">
+            <textarea aria-labelledby="analysis-evidence-label" rows={4} value={displayRound.analysis.evidence} onChange={(event) => updateAnalysisField('evidence', event.target.value)} />
+          </FieldGroup>
+          <FieldGroup id="analysis-recommendation" label="Recommendation">
+            <textarea aria-labelledby="analysis-recommendation-label" rows={4} value={displayRound.analysis.recommendation} onChange={(event) => updateAnalysisField('recommendation', event.target.value)} />
+          </FieldGroup>
+          <FieldGroup id="analysis-risk" label="Risk / uncertainty">
+            <textarea aria-labelledby="analysis-risk-label" rows={3} value={displayRound.analysis.risk} onChange={(event) => updateAnalysisField('risk', event.target.value)} />
+          </FieldGroup>
+          <FieldGroup id="analysis-questions" label="Meeting discussion questions">
+            <textarea aria-labelledby="analysis-questions-label" rows={3} value={displayRound.analysis.questions} onChange={(event) => updateAnalysisField('questions', event.target.value)} />
+          </FieldGroup>
         </div>
       </section>
     )
@@ -828,16 +907,24 @@ function App() {
         {renderValidation(displayRound.validation.urgent)}
         {displayRound.emergencyType === 'A' ? (
           <div className="card single">
-            <label><span>Short customer reply</span><textarea rows={4} value={displayRound.urgentA.customerReply} onChange={(event) => updateCurrentRound((round) => { round.urgentA.customerReply = event.target.value })} /></label>
+            <FieldGroup id="urgent-a-reply" label="Short customer reply">
+              <textarea aria-labelledby="urgent-a-reply-label" rows={4} value={displayRound.urgentA.customerReply} onChange={(event) => updateCurrentRound((round) => { round.urgentA.customerReply = event.target.value })} />
+            </FieldGroup>
             {[0, 1, 2].map((index) => (
-              <label key={index}><span>Internal action step {index + 1}</span><textarea rows={2} value={displayRound.urgentA.actionSteps[index]} onChange={(event) => updateCurrentRound((round) => { round.urgentA.actionSteps[index] = event.target.value as typeof round.urgentA.actionSteps[number] })} /></label>
+              <FieldGroup id={`urgent-a-step-${index}`} key={index} label={`Internal action step ${index + 1}`}>
+                <textarea aria-labelledby={`urgent-a-step-${index}-label`} rows={2} value={displayRound.urgentA.actionSteps[index]} onChange={(event) => updateCurrentRound((round) => { round.urgentA.actionSteps[index] = event.target.value as typeof round.urgentA.actionSteps[number] })} />
+              </FieldGroup>
             ))}
           </div>
         ) : (
           <div className="card single">
-            <label><span>Add-on note</span><textarea rows={4} value={displayRound.urgentB.addOnNote} onChange={(event) => updateCurrentRound((round) => { round.urgentB.addOnNote = event.target.value })} /></label>
+            <FieldGroup id="urgent-b-note" label="Add-on note">
+              <textarea aria-labelledby="urgent-b-note-label" rows={4} value={displayRound.urgentB.addOnNote} onChange={(event) => updateCurrentRound((round) => { round.urgentB.addOnNote = event.target.value })} />
+            </FieldGroup>
             {[0, 1, 2].map((index) => (
-              <label key={index}><span>Bullet {index + 1}</span><textarea rows={2} value={displayRound.urgentB.bullets[index]} onChange={(event) => updateCurrentRound((round) => { round.urgentB.bullets[index] = event.target.value as typeof round.urgentB.bullets[number] })} /></label>
+              <FieldGroup id={`urgent-b-bullet-${index}`} key={index} label={`Bullet ${index + 1}`}>
+                <textarea aria-labelledby={`urgent-b-bullet-${index}-label`} rows={2} value={displayRound.urgentB.bullets[index]} onChange={(event) => updateCurrentRound((round) => { round.urgentB.bullets[index] = event.target.value as typeof round.urgentB.bullets[number] })} />
+              </FieldGroup>
             ))}
           </div>
         )}
@@ -974,7 +1061,7 @@ function App() {
           </section>
 
           <section className="rightZone">
-            <div className="workArea">{renderWorkspace()}</div>
+            <div className="workArea" onWheelCapture={handleWorkAreaWheelCapture}>{renderWorkspace()}</div>
             <div className={`assistantArea ${displayRound.tool === 'avatar' ? 'avatarAssistantArea' : 'chatAssistantArea'}`} data-guide="assistant-panel">
               {renderAssistant()}
             </div>

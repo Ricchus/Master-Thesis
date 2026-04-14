@@ -735,11 +735,13 @@ code {
   margin-bottom: 10px;
 }
 
-.card label,
-.analysisGrid label {
+.fieldGroup {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.fieldLabel {
   font-size: 13px;
   color: var(--muted);
 }
@@ -771,7 +773,7 @@ code {
   gap: 10px;
 }
 
-.analysisGrid label:last-child {
+.analysisGrid .fieldGroup:last-child {
   grid-column: 1 / -1;
 }
 
