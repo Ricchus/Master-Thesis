@@ -27,7 +27,7 @@ const URGENT_TRIGGER_MS = 3 * 60 * 1000
 const RESEARCHER_KEY_CODE = 'KeyM'
 const RESET_KEY_CODE = 'KeyR'
 
-const TIMELINE: Array<{ id: PhaseId; label: string }> = [
+const FULL_TIMELINE: Array<{ id: PhaseId; label: string }> = [
   { id: 'ema1', label: 'EMA 1' },
   { id: 'stage1_replies', label: 'Replies' },
   { id: 'stage1_task_breakdown', label: 'Task breakdown' },
@@ -52,6 +52,21 @@ const SURVEY_URLS = {
     3: 'https://gatech.co1.qualtrics.com/jfe/form/SV_9LFY9RV6CnLQI3Y',
     4: 'https://gatech.co1.qualtrics.com/jfe/form/SV_87x4PTPFdihypb8'
   }
+} as const
+
+const SURVEY_CODES = {
+  1: {
+    1: '4827',
+    2: '0936',
+    3: '7154',
+    4: '2609',
+  },
+  2: {
+    1: '8481',
+    2: '5370',
+    3: '1648',
+    4: '6042',
+  },
 } as const
 
 function cloneValue<T>(value: T): T {
@@ -129,8 +144,16 @@ function getCurrentEmaIndex(phase: PhaseId): 1 | 2 | 3 | 4 | null {
   return null
 }
 
-function timelineStatus(round: RoundState, id: PhaseId) {
-  const order = TIMELINE.map((item) => item.id)
+function getVisibleTimeline(round: RoundState, researcherEnabled: boolean) {
+  if (researcherEnabled || round.phase === 'urgent' || round.urgentStartedAt) {
+    return FULL_TIMELINE
+  }
+
+  return FULL_TIMELINE.filter((item) => item.id !== 'urgent')
+}
+
+function timelineStatus(round: RoundState, id: PhaseId, timeline: Array<{ id: PhaseId; label: string }>) {
+  const order = timeline.map((item) => item.id)
   const currentIndex = order.indexOf(round.phase === 'round_intro' ? 'ema1' : round.phase)
   const targetIndex = order.indexOf(id)
   if (round.phase === 'round_complete' || round.phase === 'finished') return 'done'
@@ -313,6 +336,8 @@ function App() {
   const [validationBusy, setValidationBusy] = useState(false)
   const [assistantBusy, setAssistantBusy] = useState(false)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
+  const [surveyCodeInput, setSurveyCodeInput] = useState('')
+  const [surveyCodeError, setSurveyCodeError] = useState('')
   const emailCopyResetRef = useRef<number | null>(null)
 
   const liveRound = session.rounds[session.currentRoundIndex]
@@ -326,6 +351,10 @@ function App() {
     : ROUND_DURATION_MS
   const researcherEnabled = session.researcherMode && session.appFlow === 'study'
   const researcherUrgentCountdown = researcherEnabled ? getResearcherUrgentCountdown(displayRound, now) : null
+  const visibleTimeline = useMemo(
+    () => getVisibleTimeline(displayRound, researcherEnabled),
+    [displayRound, researcherEnabled],
+  )
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000)
@@ -339,6 +368,11 @@ function App() {
       }
     }
   }, [])
+
+  useEffect(() => {
+    setSurveyCodeInput('')
+    setSurveyCodeError('')
+  }, [emaIndex, session.currentRoundIndex])
 
   useEffect(() => {
     saveSession(session)
@@ -401,6 +435,20 @@ function App() {
     await navigator.clipboard.writeText(session.participantId)
     setCopyState('copied')
     window.setTimeout(() => setCopyState('idle'), 1200)
+  }
+
+  function verifySurveyCode(index: 1 | 2 | 3 | 4) {
+    const expected = SURVEY_CODES[liveRound.roundNumber][index]
+    const normalized = surveyCodeInput.replace(/\D/g, '').slice(0, 4)
+
+    if (normalized !== expected) {
+      setSurveyCodeError('That code does not match this survey. Check the final survey page and try again.')
+      return
+    }
+
+    setSurveyCodeError('')
+    setSurveyCodeInput('')
+    markEmaComplete(index)
   }
 
   async function copyInboxEmail(email = selectedEmail) {
@@ -655,11 +703,11 @@ function App() {
         <div className="headerTimelineRow" data-guide="timeline">
           <div className="timelineLead">Progress</div>
           <div className="timelineBar">
-            {TIMELINE.map((node) => (
+            {visibleTimeline.map((node) => (
               <button
                 key={node.id}
                 type="button"
-                className={`timelineNode ${timelineStatus(displayRound, node.id)}`}
+                className={`timelineNode ${timelineStatus(displayRound, node.id, visibleTimeline)}`}
                 onClick={() => navigateResearcher(node.id)}
                 disabled={!researcherEnabled}
                 title={researcherEnabled ? `Jump to ${node.label}` : node.label}
@@ -1107,8 +1155,38 @@ function App() {
           <div className="overlayCard">
             <div className="overlayEyebrow">EMA {emaIndex} checkpoint</div>
             <h2>Complete the external survey, then return here.</h2>
-            <p>Use the same participant ID every time.</p>
+            <ul className="overlayChecklist">
+              <li><strong>Use the same participant ID</strong> every time you open a survey.</li>
+              <li><strong>Please answer honestly</strong> based on how you feel in the moment.</li>
+              <li>At the end of the survey, you will see a <strong>four-digit completion code</strong>. Return here, enter the code, and continue.</li>
+              <li>If you <strong>accidentally close the survey</strong> or <strong>did not note the code</strong>, you can reopen the survey and complete it again.</li>
+            </ul>
             <div className="overlayIdBox">{session.participantId}</div>
+            <div className="overlayField">
+              <label htmlFor="survey-code-input">Four-digit survey code</label>
+              <input
+                id="survey-code-input"
+                className="overlayCodeInput"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={4}
+                value={surveyCodeInput}
+                onChange={(event) => {
+                  setSurveyCodeInput(event.target.value.replace(/\D/g, '').slice(0, 4))
+                  if (surveyCodeError) {
+                    setSurveyCodeError('')
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    verifySurveyCode(emaIndex)
+                  }
+                }}
+              />
+              {surveyCodeError ? <p className="overlayError">{surveyCodeError}</p> : null}
+            </div>
             <div className="overlayActions">
               <button type="button" onClick={copyParticipantId}>
                 {copyState === 'copied' ? 'Copied' : 'Copy participant ID'}
@@ -1116,8 +1194,13 @@ function App() {
               <a href={surveyUrl(session.participantId, liveRound.roundNumber, emaIndex)} target="_blank" rel="noreferrer">
                 Open survey
               </a>
-              <button type="button" className="primary" onClick={() => markEmaComplete(emaIndex)}>
-                I completed the survey
+              <button
+                type="button"
+                className="primary"
+                onClick={() => verifySurveyCode(emaIndex)}
+                disabled={surveyCodeInput.replace(/\D/g, '').length !== 4}
+              >
+                Verify and continue
               </button>
             </div>
           </div>
