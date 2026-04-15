@@ -437,6 +437,12 @@ function App() {
     window.setTimeout(() => setCopyState('idle'), 1200)
   }
 
+  function skipSurveyAsResearcher(index: 1 | 2 | 3 | 4) {
+    setSurveyCodeError('')
+    setSurveyCodeInput('')
+    markEmaComplete(index)
+  }
+
   function verifySurveyCode(index: 1 | 2 | 3 | 4) {
     const expected = SURVEY_CODES[liveRound.roundNumber][index]
     const normalized = surveyCodeInput.replace(/\D/g, '').slice(0, 4)
@@ -503,6 +509,10 @@ function App() {
     updateSession((draft) => {
       draft.appFlow = nextAppFlowAfterFinish(draft.appFlow)
       draft.guideStep = 0
+      const activeRound = draft.rounds[draft.currentRoundIndex]
+      if (activeRound.phase === 'round_intro') {
+        activeRound.phase = 'ema1'
+      }
     })
   }
 
@@ -1195,6 +1205,11 @@ function App() {
               <a href={surveyUrl(session.participantId, liveRound.roundNumber, emaIndex)} target="_blank" rel="noreferrer">
                 Open survey
               </a>
+              {researcherEnabled && (
+                <button type="button" onClick={() => skipSurveyAsResearcher(emaIndex)}>
+                  Researcher: Skip survey and continue
+                </button>
+              )}
               <button
                 type="button"
                 className="primary"

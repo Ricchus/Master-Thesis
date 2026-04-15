@@ -181,16 +181,16 @@ export const TASK_SETS: Record<'A' | 'B', TaskSet> = {
         id: 14,
         timestamp: '10:24 AM',
         from: 'Maya Patel',
-        subject: 'Send me draft bullets by 10:55 if you have them',
+        subject: 'Can I treat June as the earliest small-format timing?',
         body: [
           paragraph(
-            'If you get to a clean set of ',
-            strong('draft bullets'),
-            ' before the meeting, send them my way by ',
-            strong('10:55'),
-            '.'
+            'I want to make sure I say this cleanly in the room.'
           ),
-          paragraph('If not, just bring the final brief and we will work from that.')
+          paragraph(
+            'Am I right that ',
+            strong('small-format signage is not available before June'),
+            ', so we should not talk about small-format stores as part of an immediate rollout?'
+          )
         ],
         requiredReply: true
       }
@@ -423,14 +423,16 @@ export const TASK_SETS: Record<'A' | 'B', TaskSet> = {
         id: 14,
         timestamp: '10:24 AM',
         from: 'Maya Patel',
-        subject: 'Send me draft bullets by 10:55 if you get there',
+        subject: 'Should I keep franchise stores out of the first wave?',
         body: [
           paragraph(
-            'If you have a clean draft before the meeting, send it over by ',
-            strong('10:55'),
-            '.'
+            'Before I frame the rollout path in the room, I want to make sure I am not overstating readiness.'
           ),
-          paragraph('Otherwise, just bring the final version into the room.')
+          paragraph(
+            'Am I right that ',
+            strong('franchise stores should stay out of the first wave'),
+            ' given where training stands?'
+          )
         ],
         requiredReply: true
       }
