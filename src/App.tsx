@@ -880,7 +880,7 @@ function App() {
         <div className="deliverableHeader">
           <div>
             <h2>Stage 1B · Pre-meeting task breakdown</h2>
-            <p>Identify the work that must be completed before the 11:00 meeting. This stage is checked strictly.</p>
+            <p>List the top 3 actions that still need to be completed before the 11:00 meeting. This stage is checked strictly.</p>
           </div>
           <button
             type="button"
@@ -893,14 +893,14 @@ function App() {
         </div>
         {renderValidation(displayRound.validation.stage1_task_breakdown)}
         <div className="card single">
-          {[0, 1, 2, 3].map((index) => (
-            <FieldGroup id={`task-breakdown-${index}`} key={index} label={`Task ${index + 1}`}>
+          {[0, 1, 2].map((index) => (
+            <FieldGroup id={`task-breakdown-${index}`} key={index} label={`Priority ${index + 1}`}>
               <textarea
                 aria-labelledby={`task-breakdown-${index}-label`}
                 value={displayRound.taskBreakdown[index]}
                 onChange={(event) => updateCurrentRound((round) => { round.taskBreakdown[index] = event.target.value })}
                 rows={2}
-                placeholder={index < 3 ? 'Required' : 'Optional'}
+                placeholder="One concrete pre-meeting action"
               />
             </FieldGroup>
           ))}

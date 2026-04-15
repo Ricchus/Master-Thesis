@@ -129,7 +129,7 @@ export async function validateTaskBreakdown(round: RoundState): Promise<StageVal
   const taskSet = getTaskSet(round.taskSetId);
   const ai = await requestAiValidation(
     'Pre-meeting task breakdown',
-    `The list must identify concrete tasks that should be completed before the 11:00 meeting for ${taskSet.shortTitle}. This stage should be judged strictly. Fail if tasks are generic, not clearly pre-meeting actions, or not grounded in the packet.`,
+    `The list should contain three concise but concrete actions that should be completed before the 11:00 meeting for ${taskSet.shortTitle}. Accept short action items if they are specific, actionable, and grounded in the packet. Fail only if items are mostly generic, repeated, not clearly pre-meeting actions, or not grounded in the packet.`,
     items.map((item, index) => `${index + 1}. ${item}`).join('\n'),
     round.tool
   );

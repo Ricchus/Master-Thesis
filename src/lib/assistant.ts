@@ -194,36 +194,41 @@ function detectResponseMode(args: {
   userMessage: string;
 }): ResponseMode {
   const source = args.userMessage.toLowerCase();
+  const inTaskBreakdownStage =
+    args.phase === 'stage1_task_breakdown' || /pre-?meeting task breakdown/i.test(args.currentSectionLabel);
+  const explicitTaskBreakdownIntent =
+    /\b(task breakdown|pre-?meeting|before the 11:00|before 11:00|before (?:the )?meeting|top 3|top three|priorit|checklist|identify the work|what still needs to be done|what do i still need to do)\b/.test(source);
+  const planningQuestionIntent =
+    /\b(what should i do|what should i finish|what should be done|what do i need ready|what needs to be done|what are (?:the )?priorities|what do i need to do)\b/.test(source);
+  const draftReplyIntent =
+    (/\b(draft|compose|write|revise|polish)\b/.test(source) &&
+      /\b(reply|email|response|message)\b/.test(source)) ||
+    /\b(reply to|respond to|email to)\b/.test(source);
+  const analysisIntent =
+    /\b(recommendation|brief|analysis brief|briefing note|decision note|meeting brief|recommend)\b/.test(source);
+  const riskIntent =
+    /\b(risk|risks|discussion question|discussion questions|question for the meeting|questions for the meeting)\b/.test(source);
+  const summaryIntent =
+    /\b(summarize|summary|recap|what matters|key points|key takeaways)\b/.test(source);
 
-  if (
-    /\b(task breakdown|pre-?meeting|before the 11:00|before 11:00|top 3|top three|priorit|checklist|identify the work|what still needs to be done|what do i still need to do)\b/.test(source)
-  ) {
-    return 'task_breakdown';
-  }
-
-  if (
-    /\b(draft|compose|write|revise|polish)\b/.test(source) &&
-    /\b(reply|email|response|message)\b/.test(source)
-  ) {
+  if (draftReplyIntent) {
     return 'draft_reply';
   }
 
-  if (/\b(reply to|respond to|email to)\b/.test(source)) {
-    return 'draft_reply';
-  }
-
-  if (
-    /\b(recommendation|brief|analysis brief|briefing note|decision note|meeting brief|recommend)\b/.test(source)
-  ) {
+  if (analysisIntent) {
     return 'analysis_brief';
   }
 
-  if (/\b(risk|risks|discussion question|discussion questions|question for the meeting|questions for the meeting)\b/.test(source)) {
+  if (riskIntent) {
     return 'risk_or_question';
   }
 
-  if (/\b(summarize|summary|recap|what matters|key points|key takeaways)\b/.test(source)) {
+  if (summaryIntent) {
     return 'summary';
+  }
+
+  if (explicitTaskBreakdownIntent || (inTaskBreakdownStage && planningQuestionIntent)) {
+    return 'task_breakdown';
   }
 
   return 'general_help';
@@ -233,12 +238,17 @@ function buildResponseModeInstructions(mode: ResponseMode) {
   switch (mode) {
     case 'task_breakdown':
       return `Response contract for this request:
-- Output exactly 3 numbered priority actions.
+- Output exactly 3 numbered items using 1. 2. 3.
 - Each item must be one concrete action to complete before the 11:00 meeting.
+- Each item must include an action verb and a clear object or deliverable.
+- Focus on the remaining work; treat Stage 1A required replies as already handled unless the user explicitly asks to revisit them.
 - Merge overlapping work instead of listing near-duplicates.
-- Do not list logistics, background facts, risks, or evidence as separate items unless they require a concrete action.
-- Do not restate the same deliverable in multiple forms.
-- Keep each item to one sentence.`;
+- Do not list logistics, background facts, evidence points, packet constraints, or meeting-framing advice as separate items.
+- Do not use generic meta language such as "be ready", "keep the recommendation focused", "use concrete numbers", or "walk Maya into the review".
+- Keep each item to one short sentence.
+- Valid example: "1. Finalize the meeting brief with a clear recommendation and one main risk."
+- Invalid example: "1. Keep the recommendation focused on second-visit behavior."
+- Invalid example: "2. Use concrete numbers in the materials."`;
     case 'draft_reply':
       return `Response contract for this request:
 - Give the user a clean, directly usable draft.
@@ -308,12 +318,55 @@ function buildAnalysisEvidenceContext(taskSet: TaskSet) {
   return sections.join('\n\n');
 }
 
+function buildTaskBreakdownContext() {
+  return `Task breakdown guidance:
+- This stage asks for the remaining work before the 11:00 meeting.
+- Treat Stage 1A required replies as already handled unless the user explicitly asks to revisit them.
+- Convert deliverable requirements into a small number of concrete actions.
+- Do not list packet constraints, evidence points, or meeting-framing advice as standalone tasks unless they require a specific action.`;
+}
+
 function buildModeSpecificContext(mode: ResponseMode, taskSet: TaskSet) {
+  if (mode === 'task_breakdown') {
+    return buildTaskBreakdownContext();
+  }
+
   if (mode === 'analysis_brief') {
     return buildAnalysisEvidenceContext(taskSet);
   }
 
   return '';
+}
+
+function hasTaskBreakdownLeak(text: string) {
+  const lines = text
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length !== 3) {
+    return true;
+  }
+
+  if (!lines.every((line) => /^\d+\.\s+/.test(line))) {
+    return true;
+  }
+
+  const leakPhrases = [
+    'be ready',
+    'keep the recommendation focused',
+    'use concrete numbers',
+    'include the full cost picture',
+    'walk maya into the review',
+    'if possible',
+    'if time allows'
+  ];
+
+  return lines.some((line) => {
+    const normalized = line.toLowerCase();
+    return leakPhrases.some((phrase) => normalized.includes(phrase));
+  });
 }
 
 function buildAnalysisRetryInstructions() {
@@ -322,6 +375,15 @@ function buildAnalysisRetryInstructions() {
 - Regenerate the analysis brief using only the Primary analytical evidence and Known risks / constraints sections as content evidence.
 - Do not mention packet objectives, packet instructions, or meeting logistics inside Key findings or Evidence.
 - Keep the brief concise and directly usable in the form fields.`;
+}
+
+function buildTaskBreakdownRetryInstructions() {
+  return `Repair note for regeneration:
+- Your previous attempt was not a clean pre-meeting task breakdown.
+- Regenerate the answer as exactly 3 numbered pre-meeting actions using 1. 2. 3.
+- Remove framing advice, evidence points, logistics, and generic prep language.
+- Treat Stage 1A required replies as already handled unless the user explicitly asks to revisit them.
+- Keep each item to one short sentence with an action verb and a clear object or deliverable.`;
 }
 
 function looksChinese(text: string) {
@@ -499,6 +561,13 @@ ${modeSpecificContext ? `\n\n${modeSpecificContext}` : ''}
 
     if (responseMode === 'analysis_brief' && hasAnalysisMetaEvidenceLeak(text)) {
       const repaired = await requestChatText(`${instructions}\n\n${buildAnalysisRetryInstructions()}`, input);
+      if (repaired.kind === 'ok') {
+        text = normalizeAssistantResponseFormatting(repaired.text);
+      }
+    }
+
+    if (responseMode === 'task_breakdown' && hasTaskBreakdownLeak(text)) {
+      const repaired = await requestChatText(`${instructions}\n\n${buildTaskBreakdownRetryInstructions()}`, input);
       if (repaired.kind === 'ok') {
         text = normalizeAssistantResponseFormatting(repaired.text);
       }
