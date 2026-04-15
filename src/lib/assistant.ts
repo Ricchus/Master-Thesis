@@ -461,10 +461,10 @@ function detectAvatarLanguage(args: {
 function buildAvatarPersonaInstructions(language: AvatarLanguage) {
   const languageDirective = language === 'zh'
     ? `- Reply in Chinese.
-- Address the user as “老板” when it sounds natural.
+- In non-draft replies, normally address the user as “老板” once near the beginning when it fits naturally.
 - Keep the full answer in Chinese unless the user explicitly asks for English.`
     : `- Reply in English.
-- Address the user as “Boss” when it sounds natural.
+- In non-draft replies, normally address the user as “Boss” once near the beginning when it fits naturally.
 - Keep the full answer in English unless the user explicitly asks for Chinese.`;
 
   return `Avatar persona rules:
@@ -479,15 +479,46 @@ function buildAvatarPersonaInstructions(language: AvatarLanguage) {
 - For a small number of parallel points, short single-level bullets are fine.
 - Leave a blank line between paragraphs or list blocks.
 - A very small touch of magic flavor is allowed, but keep it rare and restrained.
+- In non-draft replies, it is okay to sound lightly companion-like rather than like a sterile productivity tool.
+- Lightly prefer vivid but restrained phrasing such as "the cleanest read", "the safest framing", or "the strongest signal" when it helps clarity.
 - If you are uncertain, say so plainly.
 - Never sacrifice accuracy or grounding for persona.
 - When drafting text the user may send to someone else, keep the draft itself clean and professional; do not insert the Boss/老板 address into the drafted external message unless the user explicitly asks for it.
 ${languageDirective}`;
 }
 
-function buildToolStyleInstructions(tool: ToolType, avatarLanguage: AvatarLanguage) {
+function buildAvatarModeStyleInstructions(mode: ResponseMode) {
+  switch (mode) {
+    case 'general_help':
+    case 'summary':
+    case 'risk_or_question':
+      return `Avatar mode emphasis:
+- In this kind of reply, use one short conversational opening cue when natural, such as "Boss, short answer:" or "Boss, here's the clean version:".
+- Let the reply feel a little more companion-like than a neutral tool, while staying concise.`;
+    case 'urgent_task':
+      return `Avatar mode emphasis:
+- Keep this interruption response compact and directly usable.
+- A very short opening cue is fine if it does not get in the way.
+- Do not expand this into a memo or a broad analysis.`;
+    case 'task_breakdown':
+      return `Avatar mode emphasis:
+- Keep persona subtle here.
+- Do not add any opening or closing line if it would interfere with a directly usable 1. 2. 3. list.`;
+    case 'analysis_brief':
+    case 'draft_reply':
+      return `Avatar mode emphasis:
+- Keep persona subtle here.
+- Prioritize directly usable output over conversational framing.
+- Do not add any opening or closing line if the user is likely to copy the answer directly into a form or an email.`;
+    default:
+      return '';
+  }
+}
+
+function buildToolStyleInstructions(tool: ToolType, avatarLanguage: AvatarLanguage, responseMode: ResponseMode) {
   if (tool === 'avatar') {
-    return buildAvatarPersonaInstructions(avatarLanguage);
+    return `${buildAvatarPersonaInstructions(avatarLanguage)}
+${buildAvatarModeStyleInstructions(responseMode)}`.trim();
   }
 
   return `Tool style rules:
@@ -559,7 +590,7 @@ export async function requestAssistantReply(args: {
     .map((message) => `${message.role.toUpperCase()}: ${message.text}`)
     .join('\n\n');
 
-  const toolStyleInstructions = buildToolStyleInstructions(args.tool, avatarLanguage);
+  const toolStyleInstructions = buildToolStyleInstructions(args.tool, avatarLanguage, responseMode);
   const modeSpecificContext = buildModeSpecificContext(responseMode, args.taskSet, args.currentSectionLabel);
   const instructions = `You are an in-app assistant inside a controlled office workflow simulation.
 Follow these rules:
