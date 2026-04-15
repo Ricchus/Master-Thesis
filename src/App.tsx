@@ -977,8 +977,8 @@ function App() {
             <FieldGroup id="urgent-a-reply" label="Short customer reply">
               <textarea aria-labelledby="urgent-a-reply-label" rows={4} value={displayRound.urgentA.customerReply} onChange={(event) => updateCurrentRound((round) => { round.urgentA.customerReply = event.target.value })} />
             </FieldGroup>
-            {[0, 1, 2].map((index) => (
-              <FieldGroup id={`urgent-a-step-${index}`} key={index} label={`Internal action step ${index + 1}`}>
+            {[0, 1].map((index) => (
+              <FieldGroup id={`urgent-a-step-${index}`} key={index} label={`Internal next step ${index + 1}`}>
                 <textarea aria-labelledby={`urgent-a-step-${index}-label`} rows={2} value={displayRound.urgentA.actionSteps[index]} onChange={(event) => updateCurrentRound((round) => { round.urgentA.actionSteps[index] = event.target.value as typeof round.urgentA.actionSteps[number] })} />
               </FieldGroup>
             ))}
@@ -988,8 +988,8 @@ function App() {
             <FieldGroup id="urgent-b-note" label="Add-on note">
               <textarea aria-labelledby="urgent-b-note-label" rows={4} value={displayRound.urgentB.addOnNote} onChange={(event) => updateCurrentRound((round) => { round.urgentB.addOnNote = event.target.value })} />
             </FieldGroup>
-            {[0, 1, 2].map((index) => (
-              <FieldGroup id={`urgent-b-bullet-${index}`} key={index} label={`Bullet ${index + 1}`}>
+            {[0, 1].map((index) => (
+              <FieldGroup id={`urgent-b-bullet-${index}`} key={index} label={`${displayRound.taskSetId === 'A' ? 'Guardrail' : 'Condition'} ${index + 1}`}>
                 <textarea aria-labelledby={`urgent-b-bullet-${index}-label`} rows={2} value={displayRound.urgentB.bullets[index]} onChange={(event) => updateCurrentRound((round) => { round.urgentB.bullets[index] = event.target.value as typeof round.urgentB.bullets[number] })} />
               </FieldGroup>
             ))}

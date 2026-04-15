@@ -263,13 +263,13 @@ export const TASK_SETS: Record<'A' | 'B', TaskSet> = {
         title: 'Type A — Escalated Customer Complaint',
         prompt:
           'A customer, Lisa Morgan, says she showed the campaign email at the store over the weekend, but the associate told her the offer had already expired. She believes the expiration date was not clearly stated and wants a prompt explanation and resolution.',
-        deliverableHint: 'Draft a short customer reply and a three-step internal action plan for the next 24 hours.'
+        deliverableHint: 'Draft a short customer reply and two internal next steps for the next 24 hours.'
       },
       B: {
         title: 'Type B — Last-Minute Meeting Add-On',
         prompt:
-          'Maya sends: “I need a very short options note for the room. Please compare three rollout paths so we can align quickly.” Compare: all standard-format stores in May; a subset of standard-format stores while revising language; or waiting until after June to align rule language and small-format signage.',
-        deliverableHint: 'Write a short decision-options note plus three option bullets with a likely benefit and risk.'
+          'Maya sends: “If leadership pushes to expand today, give me two quick rollout guardrails I can say out loud. Keep it very short. I mainly care about rule clarity, small-format timing, and checkout friction.”',
+        deliverableHint: 'Write a short add-on note plus two rollout guardrails.'
       }
     },
     analysisPromptHints: [
@@ -505,13 +505,13 @@ export const TASK_SETS: Record<'A' | 'B', TaskSet> = {
         title: 'Type A — Escalated Customer Complaint',
         prompt:
           'Customer Service forwards an urgent note. Daniel Park says he received the Come Back Soon email after his first purchase, but when he tried to use the offer in a different store today, he was told it did not apply. He believes the rules were not stated clearly and wants an explanation.',
-        deliverableHint: 'Draft a short customer reply and a three-step internal action plan for the next 24 hours.'
+        deliverableHint: 'Draft a short customer reply and two internal next steps for the next 24 hours.'
       },
       B: {
         title: 'Type B — Last-Minute Meeting Add-On',
         prompt:
-          'Maya sends: “Please add a short rollout guardrails note. If we expand next month, I want to be very clear on what has to be true first.”',
-        deliverableHint: 'Write a short rollout-guardrails note plus three guardrails or prerequisites with brief reasons.'
+          'Maya sends: “If leadership pushes for next month, give me two must-have conditions I should say up front. Keep it very short. I mainly care about training readiness, rule clarity, and reminder-card timing.”',
+        deliverableHint: 'Write a short add-on note plus two expansion conditions.'
       }
     },
     analysisPromptHints: [

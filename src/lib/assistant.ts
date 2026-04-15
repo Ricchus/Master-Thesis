@@ -4,6 +4,7 @@ import type { ConversationMessage, PhaseId, TaskSet, ToolType } from './types';
 
 type ResponseMode =
   | 'task_breakdown'
+  | 'urgent_task'
   | 'draft_reply'
   | 'analysis_brief'
   | 'risk_or_question'
@@ -194,6 +195,8 @@ function detectResponseMode(args: {
   userMessage: string;
 }): ResponseMode {
   const source = args.userMessage.toLowerCase();
+  const inUrgentStage =
+    args.phase === 'urgent' || /urgent type [ab]/i.test(args.currentSectionLabel);
   const inTaskBreakdownStage =
     args.phase === 'stage1_task_breakdown' || /pre-?meeting task breakdown/i.test(args.currentSectionLabel);
   const explicitTaskBreakdownIntent =
@@ -210,6 +213,10 @@ function detectResponseMode(args: {
     /\b(risk|risks|discussion question|discussion questions|question for the meeting|questions for the meeting)\b/.test(source);
   const summaryIntent =
     /\b(summarize|summary|recap|what matters|key points|key takeaways)\b/.test(source);
+
+  if (inUrgentStage) {
+    return 'urgent_task';
+  }
 
   if (draftReplyIntent) {
     return 'draft_reply';
@@ -249,6 +256,17 @@ function buildResponseModeInstructions(mode: ResponseMode) {
 - Valid example: "1. Finalize the meeting brief with a clear recommendation and one main risk."
 - Invalid example: "1. Keep the recommendation focused on second-visit behavior."
 - Invalid example: "2. Use concrete numbers in the materials."`;
+    case 'urgent_task':
+      return `Response contract for this request:
+- Keep the answer short and directly usable during an interruption.
+- Do not turn the response into a mini memo, options analysis, or broad meeting brief.
+- If the current focus is Urgent Type A, provide:
+  1. one short customer reply
+  2. two numbered internal next steps
+- If the current focus is Urgent Type B, provide:
+  1. one short add-on note
+  2. two numbered guardrails or conditions
+- Keep bullets concise, grounded, and actionable.`;
     case 'draft_reply':
       return `Response contract for this request:
 - Give the user a clean, directly usable draft.
@@ -326,7 +344,26 @@ function buildTaskBreakdownContext() {
 - Do not list packet constraints, evidence points, or meeting-framing advice as standalone tasks unless they require a specific action.`;
 }
 
-function buildModeSpecificContext(mode: ResponseMode, taskSet: TaskSet) {
+function buildUrgentTaskContext(currentSectionLabel: string) {
+  if (/urgent type a/i.test(currentSectionLabel)) {
+    return `Urgent task guidance:
+- This is a quick-response interruption task.
+- Give one short customer-facing reply followed by exactly two internal next steps.
+- Keep the answer compact and usable immediately.`;
+  }
+
+  return `Urgent task guidance:
+- This is a quick-response interruption task.
+- Give one short add-on note followed by exactly two guardrails or conditions.
+- Base the two points on the most important readiness or clarity issues already in the packet.
+- Keep the answer compact and usable immediately.`;
+}
+
+function buildModeSpecificContext(mode: ResponseMode, taskSet: TaskSet, currentSectionLabel: string) {
+  if (mode === 'urgent_task') {
+    return buildUrgentTaskContext(currentSectionLabel);
+  }
+
   if (mode === 'task_breakdown') {
     return buildTaskBreakdownContext();
   }
@@ -523,7 +560,7 @@ export async function requestAssistantReply(args: {
     .join('\n\n');
 
   const toolStyleInstructions = buildToolStyleInstructions(args.tool, avatarLanguage);
-  const modeSpecificContext = buildModeSpecificContext(responseMode, args.taskSet);
+  const modeSpecificContext = buildModeSpecificContext(responseMode, args.taskSet, args.currentSectionLabel);
   const instructions = `You are an in-app assistant inside a controlled office workflow simulation.
 Follow these rules:
 - Use only the fictional packet materials included below.

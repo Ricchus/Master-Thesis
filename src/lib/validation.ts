@@ -179,19 +179,19 @@ export async function validateUrgent(round: RoundState): Promise<StageValidation
   let requirements = '';
 
   if (round.emergencyType === 'A') {
-    if (!hasMeaningfulSentence(round.urgentA.customerReply, 10)) issues.push('Add a short but complete customer reply.');
-    round.urgentA.actionSteps.forEach((step, index) => {
-      if (!hasMeaningfulSentence(step, 5)) issues.push(`Action step ${index + 1} needs a concrete next action.`);
+    if (!hasMeaningfulSentence(round.urgentA.customerReply, 8)) issues.push('Add a short but complete customer reply.');
+    round.urgentA.actionSteps.slice(0, 2).forEach((step, index) => {
+      if (!hasMeaningfulSentence(step, 4)) issues.push(`Next step ${index + 1} needs a concrete action.`);
     });
-    submission = `Customer reply: ${round.urgentA.customerReply}\nAction step 1: ${round.urgentA.actionSteps[0]}\nAction step 2: ${round.urgentA.actionSteps[1]}\nAction step 3: ${round.urgentA.actionSteps[2]}`;
-    requirements = 'Provide a short customer reply plus three concrete internal action steps.';
+    submission = `Customer reply: ${round.urgentA.customerReply}\nNext step 1: ${round.urgentA.actionSteps[0]}\nNext step 2: ${round.urgentA.actionSteps[1]}`;
+    requirements = 'Provide a short customer reply plus two concrete internal next steps. Accept concise answers if they are grounded and actionable.';
   } else {
-    if (!hasMeaningfulSentence(round.urgentB.addOnNote, 10)) issues.push('Add a short add-on note.');
-    round.urgentB.bullets.forEach((bullet, index) => {
-      if (!hasMeaningfulSentence(bullet, 6)) issues.push(`Bullet ${index + 1} needs a concrete guardrail or option with enough detail.`);
+    if (!hasMeaningfulSentence(round.urgentB.addOnNote, 8)) issues.push('Add a short add-on note.');
+    round.urgentB.bullets.slice(0, 2).forEach((bullet, index) => {
+      if (!hasMeaningfulSentence(bullet, 4)) issues.push(`Guardrail or condition ${index + 1} needs a concrete, grounded point.`);
     });
-    submission = `Add-on note: ${round.urgentB.addOnNote}\nBullet 1: ${round.urgentB.bullets[0]}\nBullet 2: ${round.urgentB.bullets[1]}\nBullet 3: ${round.urgentB.bullets[2]}`;
-    requirements = 'Provide a short guardrails or options note plus three grounded bullets.';
+    submission = `Add-on note: ${round.urgentB.addOnNote}\nPoint 1: ${round.urgentB.bullets[0]}\nPoint 2: ${round.urgentB.bullets[1]}`;
+    requirements = 'Provide a short add-on note plus two grounded guardrails or conditions. Accept concise bullets if they are packet-grounded and actionable.';
   }
 
   if (issues.length) {
