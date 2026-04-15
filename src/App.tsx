@@ -149,7 +149,7 @@ function getVisibleTimeline(round: RoundState, researcherEnabled: boolean) {
     return FULL_TIMELINE
   }
 
-  return FULL_TIMELINE.filter((item) => item.id !== 'urgent')
+  return FULL_TIMELINE.filter((item) => item.id !== 'urgent' && item.id !== 'ema3')
 }
 
 function timelineStatus(round: RoundState, id: PhaseId, timeline: Array<{ id: PhaseId; label: string }>) {
@@ -549,7 +549,8 @@ function App() {
       } else if (kind === 'stage1_task_breakdown') {
         round.phase = 'ema2'
       } else if (kind === 'analysis') {
-        round.phase = 'ema3'
+        round.phase = 'ema4'
+        round.cutoffReachedAt = Date.now()
       } else if (kind === 'urgent') {
         round.phase = 'ema3'
       }
