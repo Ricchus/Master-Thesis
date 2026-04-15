@@ -304,6 +304,9 @@ const MessageBubble = memo(function MessageBubble({
               <SharedFormattedAssistantText text={message.text} />
             )}
           </div>
+          {message.role === 'assistant' && assistantRenderMode !== 'revealing' ? (
+            <div className="avatarChirp" aria-hidden="true">chew~</div>
+          ) : null}
           <div className="bubbleMeta">{formatClock(message.createdAt)}</div>
         </div>
       </div>

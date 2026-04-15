@@ -262,6 +262,15 @@
   color: rgba(35, 46, 63, 0.92);
 }
 
+.avatarTaskShell .avatarChirp {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1;
+  letter-spacing: 0.03em;
+  color: rgba(109, 132, 172, 0.82);
+  font-style: italic;
+}
+
 .avatarTaskShell .bubble.user .bubbleMeta,
 .avatarTaskShell .bubble.system-error .bubbleMeta,
 .avatarTaskShell .bubbleMeta {
