@@ -259,12 +259,15 @@ code {
 }
 
 .participantBlock button,
+.overlayParticipantBlock button,
 .pill,
 .materialTabs button,
 .deliverableHeader button,
 .assistantComposer button,
+.overlayVerifyButton,
 .overlayActions button,
 .overlayActions a,
+.overlayPrimaryAction a,
 .timelineNode,
 .guideActions button,
 .screenActions button,
@@ -276,10 +279,13 @@ code {
 }
 
 .participantBlock button,
+.overlayParticipantBlock button,
 .deliverableHeader button,
 .assistantComposer button,
+.overlayVerifyButton,
 .overlayActions button,
 .overlayActions a,
+.overlayPrimaryAction a,
 .guideActions button,
 .screenActions button,
 .introIdPanel button {
@@ -288,10 +294,13 @@ code {
 }
 
 .participantBlock button:hover,
+.overlayParticipantBlock button:hover,
 .deliverableHeader button:hover,
 .assistantComposer button:hover,
+.overlayVerifyButton:hover,
 .overlayActions button:hover,
 .overlayActions a:hover,
+.overlayPrimaryAction a:hover,
 .materialTabs button:hover,
 .guideActions button:hover,
 .screenActions button:hover,
@@ -1176,14 +1185,23 @@ code {
   margin: 0;
 }
 
-.overlayIdBox {
-  border: 1px dashed rgba(15, 111, 255, 0.35);
-  background: var(--accent-soft);
-  color: var(--accent);
-  border-radius: 14px;
-  padding: 14px 16px;
-  font-weight: 700;
+.overlayParticipantBlock {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 12px;
   margin: 16px 0;
+  border-radius: 14px;
+  background: var(--panel-soft);
+}
+
+.overlayParticipantBlock strong {
+  font-size: 13px;
+  display: block;
+  margin-top: 1px;
+  word-break: break-all;
 }
 
 .overlayField {
@@ -1192,19 +1210,48 @@ code {
   margin-bottom: 16px;
 }
 
+.overlayPrimaryAction {
+  margin-bottom: 16px;
+}
+
+.overlayPrimaryAction a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.overlayPrimaryAction .primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+  box-shadow: 0 10px 24px rgba(15, 111, 255, 0.22);
+}
+
 .overlayField label {
   font-size: 14px;
   font-weight: 700;
   color: var(--text);
 }
 
+.overlayCodeRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .overlayCodeInput {
-  width: min(220px, 100%);
+  flex: 1;
+  width: auto;
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 12px 14px;
   font: inherit;
   letter-spacing: 0.1em;
+}
+
+.overlayVerifyButton {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .overlayCodeInput:focus-visible {
@@ -1228,6 +1275,16 @@ code {
 .overlayActions .danger {
   background: #7f1d1d;
   color: white;
+}
+
+.overlayActions .primary:hover {
+  background: #1f2937;
+  border-color: #1f2937;
+}
+
+.overlayPrimaryAction .primary:hover {
+  background: #0b5ee0;
+  border-color: #0b5ee0;
 }
 
 @media (max-width: 1360px) {
@@ -1279,6 +1336,26 @@ code {
   }
 }
 
+@media (max-height: 900px) {
+  body {
+    overflow: auto;
+  }
+
+  .appShell {
+    height: auto;
+    min-height: 100svh;
+    overflow: visible;
+  }
+
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .rightZone {
+    grid-template-rows: minmax(360px, auto) minmax(340px, auto);
+  }
+}
+
 @media (max-width: 720px) {
   .screenShell,
   .appShell {
@@ -1293,6 +1370,7 @@ code {
 
   .introIdPanel,
   .participantBlock,
+  .overlayParticipantBlock,
   .headerIdentity,
   .headerControls,
   .zoneHeader,
@@ -1300,6 +1378,11 @@ code {
   .materialReaderHeader,
   .assistantComposer,
   .overlayActions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .overlayCodeRow {
     flex-direction: column;
     align-items: stretch;
   }

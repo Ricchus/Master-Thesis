@@ -1252,53 +1252,67 @@ function App() {
               <li>At the end of the survey, you will see a <strong>four-digit completion code</strong>. Return here, enter the code, and continue.</li>
               <li>If you <strong>accidentally close the survey</strong> or <strong>did not note the code</strong>, you can reopen the survey and complete it again.</li>
             </ul>
-            <div className="overlayIdBox">{session.participantId}</div>
-            <div className="overlayField">
-              <label htmlFor="survey-code-input">Four-digit survey code</label>
-              <input
-                id="survey-code-input"
-                className="overlayCodeInput"
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                maxLength={4}
-                value={surveyCodeInput}
-                onChange={(event) => {
-                  setSurveyCodeInput(event.target.value.replace(/\D/g, '').slice(0, 4))
-                  if (surveyCodeError) {
-                    setSurveyCodeError('')
-                  }
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault()
-                    verifySurveyCode(emaIndex)
-                  }
-                }}
-              />
-              {surveyCodeError ? <p className="overlayError">{surveyCodeError}</p> : null}
-            </div>
-            <div className="overlayActions">
+            <div className="overlayParticipantBlock">
+              <div>
+                <span className="label">Participant ID</span>
+                <strong>{session.participantId}</strong>
+              </div>
               <button type="button" onClick={copyParticipantId}>
-                {copyState === 'copied' ? 'Copied' : 'Copy participant ID'}
+                {copyState === 'copied' ? 'Copied' : 'Copy ID'}
               </button>
-              <a href={surveyUrl(session.participantId, liveRound.roundNumber, emaIndex)} target="_blank" rel="noreferrer">
+            </div>
+            <div className="overlayPrimaryAction">
+              <a
+                className="primary"
+                href={surveyUrl(session.participantId, liveRound.roundNumber, emaIndex)}
+                target="_blank"
+                rel="noreferrer"
+              >
                 Open survey
               </a>
-              {researcherEnabled && (
+            </div>
+            <div className="overlayField">
+              <label htmlFor="survey-code-input">Four-digit survey code</label>
+              <div className="overlayCodeRow">
+                <input
+                  id="survey-code-input"
+                  className="overlayCodeInput"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={4}
+                  value={surveyCodeInput}
+                  onChange={(event) => {
+                    setSurveyCodeInput(event.target.value.replace(/\D/g, '').slice(0, 4))
+                    if (surveyCodeError) {
+                      setSurveyCodeError('')
+                    }
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      verifySurveyCode(emaIndex)
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className="overlayVerifyButton"
+                  onClick={() => verifySurveyCode(emaIndex)}
+                  disabled={surveyCodeInput.replace(/\D/g, '').length !== 4}
+                >
+                  Verify and continue
+                </button>
+              </div>
+              {surveyCodeError ? <p className="overlayError">{surveyCodeError}</p> : null}
+            </div>
+            {researcherEnabled && (
+              <div className="overlayActions">
                 <button type="button" onClick={() => skipSurveyAsResearcher(emaIndex)}>
                   Researcher: Skip survey and continue
                 </button>
-              )}
-              <button
-                type="button"
-                className="primary"
-                onClick={() => verifySurveyCode(emaIndex)}
-                disabled={surveyCodeInput.replace(/\D/g, '').length !== 4}
-              >
-                Verify and continue
-              </button>
-            </div>
+              </div>
+            )}
           </div>
         </div>
       )}
