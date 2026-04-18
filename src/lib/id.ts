@@ -9,10 +9,10 @@ function randomShortCode() {
   return Array.from({ length: 4 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
 }
 
-export function buildParticipantId(comboCode: ComboCode) {
+export function buildParticipantId(comboCode: ComboCode, urgentCode: string) {
   const now = new Date();
   const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-  return `${stamp}-${randomShortCode()}-${comboCode}`;
+  return `${stamp}-${randomShortCode()}-${comboCode}-${urgentCode}`;
 }
 
 export function uid(prefix = 'id') {
