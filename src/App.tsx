@@ -23,7 +23,7 @@ import type {
 import { validateAnalysis, validateReplies, validateTaskBreakdown, validateUrgent } from './lib/validation'
 
 const ROUND_DURATION_MS = 15 * 60 * 1000
-const URGENT_TRIGGER_MS = 3 * 60 * 1000
+const URGENT_TRIGGER_MS = 90 * 1000
 const RESEARCHER_KEY_CODE = 'KeyM'
 const RESET_KEY_CODE = 'KeyR'
 
@@ -93,6 +93,27 @@ function formatRemaining(ms: number) {
   const minutes = Math.floor(total / 60)
   const seconds = total % 60
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+}
+
+function isCountdownPausedPhase(phase: PhaseId) {
+  return phase === 'ema1' || phase === 'ema2' || phase === 'ema3' || phase === 'ema4'
+}
+
+function pauseCountdown(round: RoundState, timestamp = Date.now()) {
+  if (!round.startedAt || round.countdownPausedAt !== null) return
+  round.countdownPausedAt = timestamp
+}
+
+function resumeCountdown(round: RoundState, timestamp = Date.now()) {
+  if (round.countdownPausedAt === null) return
+  round.countdownPausedTotalMs += Math.max(0, timestamp - round.countdownPausedAt)
+  round.countdownPausedAt = null
+}
+
+function getEffectiveElapsedMs(round: RoundState, now: number) {
+  if (!round.startedAt) return 0
+  const effectiveNow = round.countdownPausedAt ?? now
+  return Math.max(0, effectiveNow - round.startedAt - round.countdownPausedTotalMs)
 }
 
 function phaseLabel(phase: PhaseId) {
@@ -209,14 +230,28 @@ function applyResearcherPhaseTiming(round: RoundState, target: PhaseId) {
 
   if (target === 'ema1') {
     round.startedAt = null
+    round.countdownPausedAt = null
+    round.countdownPausedTotalMs = 0
     round.analysisStartedAt = null
     round.urgentStartedAt = null
     round.cutoffReachedAt = null
     return
   }
 
-  if (target === 'stage1_replies' || target === 'stage1_task_breakdown' || target === 'ema2') {
+  if (target === 'stage1_replies' || target === 'stage1_task_breakdown') {
     round.startedAt = currentTime
+    round.countdownPausedAt = null
+    round.countdownPausedTotalMs = 0
+    round.analysisStartedAt = null
+    round.urgentStartedAt = null
+    round.cutoffReachedAt = null
+    return
+  }
+
+  if (target === 'ema2') {
+    round.startedAt = currentTime
+    round.countdownPausedAt = currentTime
+    round.countdownPausedTotalMs = 0
     round.analysisStartedAt = null
     round.urgentStartedAt = null
     round.cutoffReachedAt = null
@@ -225,6 +260,8 @@ function applyResearcherPhaseTiming(round: RoundState, target: PhaseId) {
 
   if (target === 'analysis') {
     round.startedAt = currentTime
+    round.countdownPausedAt = null
+    round.countdownPausedTotalMs = 0
     round.analysisStartedAt = currentTime
     round.urgentStartedAt = null
     round.cutoffReachedAt = null
@@ -233,6 +270,8 @@ function applyResearcherPhaseTiming(round: RoundState, target: PhaseId) {
 
   if (target === 'urgent') {
     round.startedAt = currentTime
+    round.countdownPausedAt = null
+    round.countdownPausedTotalMs = 0
     round.analysisStartedAt = currentTime - URGENT_TRIGGER_MS
     round.urgentStartedAt = currentTime
     round.cutoffReachedAt = null
@@ -243,6 +282,8 @@ function applyResearcherPhaseTiming(round: RoundState, target: PhaseId) {
 
   if (target === 'ema3') {
     round.startedAt = currentTime
+    round.countdownPausedAt = currentTime
+    round.countdownPausedTotalMs = 0
     round.analysisStartedAt = hadUrgent ? currentTime - URGENT_TRIGGER_MS : null
     round.urgentStartedAt = hadUrgent ? currentTime : null
     round.cutoffReachedAt = null
@@ -253,8 +294,18 @@ function applyResearcherPhaseTiming(round: RoundState, target: PhaseId) {
     return
   }
 
-  if (target === 'cutoff' || target === 'ema4') {
+  if (target === 'cutoff') {
     round.startedAt = currentTime - ROUND_DURATION_MS
+    round.countdownPausedAt = null
+    round.countdownPausedTotalMs = 0
+    round.cutoffReachedAt = currentTime
+    return
+  }
+
+  if (target === 'ema4') {
+    round.startedAt = currentTime
+    round.countdownPausedAt = currentTime
+    round.countdownPausedTotalMs = 0
     round.cutoffReachedAt = currentTime
   }
 }
@@ -283,6 +334,8 @@ function getGuidePreviewRound(round: RoundState): RoundState {
   const preview = cloneValue(round)
   preview.phase = 'stage1_replies'
   preview.startedAt = null
+  preview.countdownPausedAt = null
+  preview.countdownPausedTotalMs = 0
   preview.analysisStartedAt = null
   preview.urgentStartedAt = null
   preview.cutoffReachedAt = null
@@ -294,6 +347,12 @@ function getGuidePreviewRound(round: RoundState): RoundState {
 
 function nextAppFlowAfterFinish(flow: AppFlow) {
   return flow === 'guide' ? 'study' : flow
+}
+
+function enterFirstEmaIfAtRoundIntro(round: RoundState) {
+  if (round.phase === 'round_intro') {
+    round.phase = 'ema1'
+  }
 }
 
 function FieldGroup({
@@ -347,8 +406,9 @@ function App() {
   const requiredEmails = useMemo(() => getRequiredEmails(displayRound.taskSetId), [displayRound.taskSetId])
   const emaIndex = session.appFlow === 'study' ? getCurrentEmaIndex(liveRound.phase) : null
   const countdownMs = session.appFlow === 'study' && liveRound.startedAt
-    ? ROUND_DURATION_MS - (now - liveRound.startedAt)
+    ? ROUND_DURATION_MS - getEffectiveElapsedMs(liveRound, now)
     : ROUND_DURATION_MS
+  const countdownPaused = session.appFlow === 'study' && isCountdownPausedPhase(liveRound.phase) && liveRound.countdownPausedAt !== null
   const researcherEnabled = session.researcherMode && session.appFlow === 'study'
   const researcherUrgentCountdown = researcherEnabled ? getResearcherUrgentCountdown(displayRound, now) : null
   const visibleTimeline = useMemo(
@@ -407,7 +467,7 @@ function App() {
       return
     }
 
-    if (now - liveRound.startedAt >= ROUND_DURATION_MS) {
+    if (getEffectiveElapsedMs(liveRound, now) >= ROUND_DURATION_MS) {
       setSession((prev) => withCurrentRound(prev, (round) => {
         if (round.phase !== 'cutoff' && round.phase !== 'ema3' && round.phase !== 'ema4' && round.phase !== 'round_complete') {
           round.phase = 'cutoff'
@@ -429,7 +489,7 @@ function App() {
         }))
       }
     }
-  }, [liveRound.analysisStartedAt, liveRound.phase, liveRound.startedAt, liveRound.urgentStartedAt, now, session.appFlow])
+  }, [liveRound.analysisStartedAt, liveRound.countdownPausedAt, liveRound.countdownPausedTotalMs, liveRound.phase, liveRound.startedAt, liveRound.urgentStartedAt, now, session.appFlow])
 
   async function copyParticipantId() {
     await navigator.clipboard.writeText(session.participantId)
@@ -509,25 +569,28 @@ function App() {
     updateSession((draft) => {
       draft.appFlow = nextAppFlowAfterFinish(draft.appFlow)
       draft.guideStep = 0
-      const activeRound = draft.rounds[draft.currentRoundIndex]
-      if (activeRound.phase === 'round_intro') {
-        activeRound.phase = 'ema1'
-      }
+      enterFirstEmaIfAtRoundIntro(draft.rounds[draft.currentRoundIndex])
     })
   }
 
   function markEmaComplete(index: 1 | 2 | 3 | 4) {
     setSession((prev) => withCurrentRound(prev, (round) => {
+      const currentTime = Date.now()
       round.emaCompleted[`ema${index}` as const] = true
       if (index === 1) {
         round.phase = 'stage1_replies'
-        round.startedAt ??= Date.now()
+        round.startedAt ??= currentTime
+        round.countdownPausedAt = null
+        round.countdownPausedTotalMs = 0
       } else if (index === 2) {
+        resumeCountdown(round, currentTime)
         round.phase = 'analysis'
-        round.analysisStartedAt ??= Date.now()
+        round.analysisStartedAt ??= currentTime
       } else if (index === 3) {
+        resumeCountdown(round, currentTime)
         round.phase = 'analysis'
       } else if (index === 4) {
+        pauseCountdown(round, currentTime)
         round.roundComplete = true
         round.phase = 'round_complete'
       }
@@ -552,16 +615,20 @@ function App() {
     }
 
     setSession((prev) => withCurrentRound(prev, (round) => {
+      const currentTime = Date.now()
       round.validation[kind] = result
       if (!result.passed) return
       if (kind === 'stage1_replies') {
         round.phase = 'stage1_task_breakdown'
       } else if (kind === 'stage1_task_breakdown') {
+        pauseCountdown(round, currentTime)
         round.phase = 'ema2'
       } else if (kind === 'analysis') {
+        pauseCountdown(round, currentTime)
         round.phase = 'ema4'
-        round.cutoffReachedAt = Date.now()
+        round.cutoffReachedAt = currentTime
       } else if (kind === 'urgent') {
+        pauseCountdown(round, currentTime)
         round.phase = 'ema3'
       }
     }))
@@ -571,6 +638,7 @@ function App() {
     setSession((prev) => mutateSession(prev, (draft) => {
       if (draft.currentRoundIndex === 0) {
         draft.currentRoundIndex = 1
+        enterFirstEmaIfAtRoundIntro(draft.rounds[draft.currentRoundIndex])
       }
     }))
   }
@@ -697,8 +765,8 @@ function App() {
               </div>
             </details>
 
-            <div className={`countdown ${countdownMs <= 3 * 60 * 1000 && session.appFlow === 'study' ? 'danger' : ''}`} data-guide="meeting-countdown">
-              <span className="label">Meeting starts in</span>
+            <div className={`countdown ${!countdownPaused && countdownMs <= 3 * 60 * 1000 && session.appFlow === 'study' ? 'danger' : ''}`} data-guide="meeting-countdown">
+              <span className="label">{countdownPaused ? 'Meeting timer paused' : 'Meeting starts in'}</span>
               <strong>{formatRemaining(countdownMs)}</strong>
             </div>
 
@@ -1059,7 +1127,10 @@ function App() {
         <section className="deliverableSection cutoffNotice" data-guide="workspace-panel">
           <h2>Meeting started. Editing is locked.</h2>
           <p>The hard cutoff has been reached. Proceed to EMA 4.</p>
-          <button type="button" data-guide="continue-button" onClick={() => updateCurrentRound((round) => { round.phase = 'ema4' })}>
+          <button type="button" data-guide="continue-button" onClick={() => updateCurrentRound((round) => {
+            pauseCountdown(round)
+            round.phase = 'ema4'
+          })}>
             Proceed to EMA 4
           </button>
         </section>

@@ -111,6 +111,8 @@ export type RoundState = {
   emergencyType: EmergencyType;
   phase: PhaseId;
   startedAt: number | null;
+  countdownPausedAt: number | null;
+  countdownPausedTotalMs: number;
   analysisStartedAt: number | null;
   urgentStartedAt: number | null;
   cutoffReachedAt: number | null;

@@ -23,6 +23,8 @@ function buildRound(roundNumber: 1 | 2, tool: ToolType, taskSetId: 'A' | 'B', em
     emergencyType,
     phase: 'round_intro',
     startedAt: null,
+    countdownPausedAt: null,
+    countdownPausedTotalMs: 0,
     analysisStartedAt: null,
     urgentStartedAt: null,
     cutoffReachedAt: null,
@@ -64,10 +66,11 @@ export function createNewSession(): SessionState {
   const roundSets: ['A' | 'B', 'A' | 'B'] = setToken === 'AB' ? ['A', 'B'] : ['B', 'A'];
   const round1Emergency: EmergencyType = Math.random() < 0.5 ? 'A' : 'B';
   const round2Emergency: EmergencyType = round1Emergency === 'A' ? 'B' : 'A';
+  const urgentCode = `U${round1Emergency}${round2Emergency}`;
 
   return {
-    version: 4,
-    participantId: buildParticipantId(comboCode),
+    version: 5,
+    participantId: buildParticipantId(comboCode, urgentCode),
     comboCode,
     createdAt: Date.now(),
     currentRoundIndex: 0,
