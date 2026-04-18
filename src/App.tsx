@@ -22,7 +22,8 @@ import type {
 } from './lib/types'
 import { validateAnalysis, validateReplies, validateTaskBreakdown, validateUrgent } from './lib/validation'
 
-const ROUND_DURATION_MS = 15 * 60 * 1000
+const ROUND_DURATION_MINUTES = 20
+const ROUND_DURATION_MS = ROUND_DURATION_MINUTES * 60 * 1000
 const URGENT_TRIGGER_MS = 90 * 1000
 const RESEARCHER_KEY_CODE = 'KeyM'
 const RESET_KEY_CODE = 'KeyR'
@@ -347,6 +348,10 @@ function getGuidePreviewRound(round: RoundState): RoundState {
 
 function nextAppFlowAfterFinish(flow: AppFlow) {
   return flow === 'guide' ? 'study' : flow
+}
+
+function renderTaskAssistHint() {
+  return <p className="deliverableAssistHint"><strong>Use the assistant to help you draft task responses.</strong></p>
 }
 
 function enterFirstEmaIfAtRoundIntro(round: RoundState) {
@@ -895,6 +900,7 @@ function App() {
           <div>
             <h2>Stage 1A · Required email replies</h2>
             <p>Write one or two complete sentences minimum for each required reply.</p>
+            {renderTaskAssistHint()}
           </div>
           <button
             type="button"
@@ -949,6 +955,7 @@ function App() {
           <div>
             <h2>Stage 1B · Pre-meeting task breakdown</h2>
             <p>List the top 3 actions that still need to be completed before the 11:00 meeting. This stage is checked strictly.</p>
+            {renderTaskAssistHint()}
           </div>
           <button
             type="button"
@@ -990,6 +997,7 @@ function App() {
           <div>
             <h2>Stage 2 · Analysis brief</h2>
             <p>Use the packet only. Passing this check submits the analysis brief and ends the task.</p>
+            {renderTaskAssistHint()}
           </div>
           <button
             type="button"
@@ -1029,6 +1037,7 @@ function App() {
           <div>
             <h2>Urgent task · Type {displayRound.emergencyType}</h2>
             <p>{taskSet.urgentTasks[displayRound.emergencyType].deliverableHint}</p>
+            {renderTaskAssistHint()}
           </div>
           <button
             type="button"
@@ -1079,7 +1088,7 @@ function App() {
           <li>Submit a pre-meeting task breakdown.</li>
           <li>Complete the analysis brief.</li>
           <li>Handle the urgent task if it appears.</li>
-          <li>Total drafting time before the meeting starts: 15 minutes.</li>
+          <li>Total drafting time before the meeting starts: {ROUND_DURATION_MINUTES} minutes.</li>
         </ul>
         <button type="button" data-guide="continue-button" onClick={() => updateCurrentRound((round) => { round.phase = 'ema1' })}>
           Go to EMA 1
