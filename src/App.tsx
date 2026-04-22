@@ -429,9 +429,20 @@ function App() {
   const countdownPaused = session.appFlow === 'study' && isCountdownPausedPhase(liveRound.phase) && liveRound.countdownPausedAt !== null
   const researcherEnabled = session.researcherMode && session.appFlow === 'study'
   const researcherUrgentCountdown = researcherEnabled ? getResearcherUrgentCountdown(displayRound, now) : null
-  const visibleTimeline = useMemo(
-    () => getVisibleTimeline(displayRound, researcherEnabled),
-    [displayRound, researcherEnabled],
+  const timelineRounds = useMemo(
+    () =>
+      session.rounds.map((round, index) => {
+        const roundForDisplay = index === session.currentRoundIndex ? displayRound : round
+        const timeline = getVisibleTimeline(roundForDisplay, researcherEnabled)
+        return {
+          roundIndex: index,
+          roundNumber: round.roundNumber,
+          round: roundForDisplay,
+          timeline,
+          isCurrent: index === session.currentRoundIndex,
+        }
+      }),
+    [displayRound, researcherEnabled, session.currentRoundIndex, session.rounds],
   )
 
   useEffect(() => {
@@ -799,18 +810,31 @@ function App() {
         <div className="headerTimelineRow" data-guide="timeline">
           <div className="timelineLead">Progress</div>
           <div className="timelineBar">
-            {visibleTimeline.map((node) => (
-              <button
-                key={node.id}
-                type="button"
-                className={`timelineNode ${timelineStatus(displayRound, node.id, visibleTimeline)}`}
-                onClick={() => navigateResearcher(node.id)}
-                disabled={!researcherEnabled}
-                title={researcherEnabled ? `Jump to ${node.label}` : node.label}
+            {timelineRounds.map(({ roundIndex, roundNumber, round, timeline, isCurrent }) => (
+              <div
+                key={roundNumber}
+                className={`timelineGroup ${isCurrent ? 'current' : ''}`}
               >
-                <span className="timelineDot" />
-                <span>{node.label}</span>
-              </button>
+                <div className="timelineGroupLabel">Round {roundNumber}</div>
+                <div className="timelineGroupNodes">
+                  {timeline.map((node) => {
+                    const allowResearcherJump = researcherEnabled && isCurrent
+                    return (
+                      <button
+                        key={`${roundIndex}-${node.id}`}
+                        type="button"
+                        className={`timelineNode ${timelineStatus(round, node.id, timeline)}`}
+                        onClick={() => navigateResearcher(node.id)}
+                        disabled={!allowResearcherJump}
+                        title={allowResearcherJump ? `Jump to ${node.label}` : node.label}
+                      >
+                        <span className="timelineDot" />
+                        <span>{node.label}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
             ))}
           </div>
         </div>
