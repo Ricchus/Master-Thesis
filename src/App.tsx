@@ -25,6 +25,7 @@ import { validateAnalysis, validateReplies, validateTaskBreakdown, validateUrgen
 const ROUND_DURATION_MINUTES = 20
 const ROUND_DURATION_MS = ROUND_DURATION_MINUTES * 60 * 1000
 const URGENT_TRIGGER_MS = 90 * 1000
+const PROLIFIC_COMPLETE_URL = 'https://app.prolific.com/submissions/complete?cc=C1C2AOT2'
 const RESEARCHER_KEY_CODE = 'KeyM'
 const RESET_KEY_CODE = 'KeyR'
 
@@ -360,6 +361,14 @@ function enterFirstEmaIfAtRoundIntro(round: RoundState) {
   }
 }
 
+function buildFinishedSession(session: SessionState) {
+  return mutateSession(session, (draft) => {
+    draft.rounds[draft.currentRoundIndex].phase = 'finished'
+    draft.appFlow = 'finished'
+    draft.guideStep = 0
+  })
+}
+
 function FieldGroup({
   children,
   className,
@@ -410,6 +419,10 @@ function App() {
   const liveTaskSet = useMemo(() => getTaskSet(liveRound.taskSetId), [liveRound.taskSetId])
   const requiredEmails = useMemo(() => getRequiredEmails(displayRound.taskSetId), [displayRound.taskSetId])
   const emaIndex = session.appFlow === 'study' ? getCurrentEmaIndex(liveRound.phase) : null
+  const showStudyEndModal =
+    session.appFlow === 'study' &&
+    session.currentRoundIndex === 1 &&
+    displayRound.phase === 'round_complete'
   const countdownMs = session.appFlow === 'study' && liveRound.startedAt
     ? ROUND_DURATION_MS - getEffectiveElapsedMs(liveRound, now)
     : ROUND_DURATION_MS
@@ -654,12 +667,11 @@ function App() {
     setShowResetConfirm(false)
   }
 
-  function finishStudy() {
-    updateSession((draft) => {
-      draft.rounds[draft.currentRoundIndex].phase = 'finished'
-      draft.appFlow = 'finished'
-      draft.guideStep = 0
-    })
+  function completeStudyAndRedirect() {
+    const next = buildFinishedSession(session)
+    saveSession(next)
+    setSession(next)
+    window.location.assign(PROLIFIC_COMPLETE_URL)
   }
 
   async function handleAssistantSend(text: string) {
@@ -1106,9 +1118,7 @@ function App() {
             Start round 2
           </button>
         ) : (
-          <button type="button" data-guide="continue-button" onClick={finishStudy}>
-            Finish study
-          </button>
+          <p>Use the dialog to return to Prolific and complete the study.</p>
         )}
       </section>
     )
@@ -1117,9 +1127,14 @@ function App() {
   function renderFinished() {
     return (
       <section className="deliverableSection introPanel" data-guide="workspace-panel">
-        <h2>All rounds completed</h2>
+        <h2>Study complete</h2>
         <p>Participant ID: <strong>{session.participantId}</strong></p>
-        <p>Notify the researcher that both rounds and all EMA checkpoints are complete.</p>
+        <p>Redirect back to Prolific and get paid.</p>
+        <div className="overlayActions">
+          <a className="primary" href={PROLIFIC_COMPLETE_URL} rel="noreferrer">
+            Return to Prolific
+          </a>
+        </div>
       </section>
     )
   }
@@ -1326,6 +1341,22 @@ function App() {
             <div className="overlayActions">
               <button type="button" onClick={() => setShowResetConfirm(false)}>Cancel</button>
               <button type="button" className="danger" onClick={restartStudy}>Clear and restart</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showStudyEndModal && (
+        <div className="overlayBackdrop">
+          <div className="overlayCard narrow">
+            <div className="overlayEyebrow">Study complete</div>
+            <h2>Study End</h2>
+            <p>Redirect back to Prolific and get paid.</p>
+            <p>Click the button below to open: <strong>{PROLIFIC_COMPLETE_URL}</strong></p>
+            <div className="overlayActions">
+              <button type="button" className="primary" onClick={completeStudyAndRedirect}>
+                Return to Prolific
+              </button>
             </div>
           </div>
         </div>
