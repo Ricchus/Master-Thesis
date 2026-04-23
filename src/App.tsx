@@ -24,7 +24,7 @@ import { validateAnalysis, validateReplies, validateTaskBreakdown, validateUrgen
 
 const ROUND_DURATION_MINUTES = 20
 const ROUND_DURATION_MS = ROUND_DURATION_MINUTES * 60 * 1000
-const URGENT_TRIGGER_MS = 90 * 1000
+const URGENT_TRIGGER_MS = 45 * 1000
 const PROLIFIC_COMPLETE_URL = 'https://app.prolific.com/submissions/complete?cc=C1C2AOT2'
 const RESEARCHER_KEY_CODE = 'KeyM'
 const RESET_KEY_CODE = 'KeyR'
